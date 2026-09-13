@@ -1,4 +1,4 @@
-import argparse,codecs,os,pty,fcntl,termios,struct,subprocess,time,select,json
+import argparse,tempfile,codecs,os,pty,fcntl,termios,struct,subprocess,time,select,json
 from pathlib import Path
 import pyte
 parser=argparse.ArgumentParser(description="Exercise Linger in a real terminal using fictional evidence.")
@@ -10,6 +10,8 @@ fcntl.ioctl(slave,termios.TIOCSWINSZ,struct.pack('HHHH',40,120,0,0))
 env=dict(os.environ,TERM='xterm-256color',COLORTERM='truecolor')
 # The agent runner sets NO_COLOR; this fixture explicitly checks colour rendering.
 env.pop('NO_COLOR',None)
+library_dir=tempfile.TemporaryDirectory(prefix='linger-smoke-')
+env['LINGER_DATA_DIR']=library_dir.name
 if not args.live_mercury:
     env.pop('INCEPTION_API_KEY',None)
     env.pop('OPENROUTER_API_KEY',None)
@@ -77,3 +79,4 @@ try:
 finally:
     if p.poll() is None: p.terminate();p.wait()
     os.close(master)
+    library_dir.cleanup()

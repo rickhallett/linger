@@ -13,9 +13,11 @@ Implemented in the initial local build:
 - Explicit asynchronous Mercury interpretation tied to selected evidence.
 - Fictional demo and regression coverage for evidence/time/navigation.
 
-The operator completed a visual pass of the first build. A live Mercury 2.5 request through OpenRouter has been verified with the fictional Python failure; navigation remained responsive. The next visual pass introduces Linger's own theme (see [visual design](VISUAL-DESIGN.md)). Long-result responsiveness and sustained real-session use still need measured profiling beyond basic regression tests.
+The operator completed a visual pass of the first build. A live Mercury 2.5 request through OpenRouter has been verified with the fictional Python failure; navigation remained responsive. The accepted build uses Linger's Osaka Jade theme (see [visual design](VISUAL-DESIGN.md)). Long-result responsiveness and sustained real-session use still need measured profiling beyond basic regression tests.
 
 ## Personal attention
+
+Implemented on the pattern-library branch:
 
 - Conservative command/usage/composition grouping, retaining original occurrences.
 - Session and cross-session frequency distributions; separate raw occurrences from distinct-session spread.
@@ -23,6 +25,8 @@ The operator completed a visual pass of the first build. A live Mercury 2.5 requ
 - Store personal learning state separately from rebuildable indexes.
 - Consistent non-colour as well as colour highlighting for Practising patterns across views and time.
 - Hide Learned patterns from learning projections without removing execution context.
+
+The first index accumulates opened sessions, supports bounded usage forms and exact-input fallbacks, and keeps SQLite command observations separate from learning choices. Counts show whole recordings; the inspector still follows the playhead. `b` opens the library; `Tab` changes scope. Practising uses a yellow ◎ in the inspector and timeline. Cached-only recordings currently require opening their source separately.
 
 ## Richer explanation and replay
 

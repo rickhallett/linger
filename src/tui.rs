@@ -37,6 +37,7 @@ pub async fn run(
     _tail_tx: mpsc::Sender<TailRequest>,
     mut ui_rx: mpsc::Receiver<UiEvent>,
 ) -> anyhow::Result<()> {
+    let (library_tx, mut library_rx, library_worker) = crate::patterns::storage::worker();
     let mut terminal = ratatui::init();
     execute!(stdout(), EnableMouseCapture)?;
     install_panic_hook();
@@ -68,6 +69,45 @@ pub async fn run(
     let mut pilot: Option<crate::autopilot::Autopilot> = None;
 
     let result = loop {
+        flush_library(&mut app, &library_tx);
+        while let Ok(reply) = library_rx.try_recv() {
+            use crate::patterns::storage::Reply;
+            match reply {
+                Reply::Loaded(cache, states) => {
+                    app.library.cached = cache;
+                    for (key, state) in states {
+                        app.library.states.entry(key).or_insert(state);
+                    }
+                    app.library.ready = true;
+                }
+                Reply::Indexed(cache) => {
+                    app.library.cached = cache;
+                    app.library.ready = true;
+                }
+                Reply::Saved(result) => {
+                    app.library.saving = app.library.saving.saturating_sub(1);
+                    app.library.notice = Some(match result {
+                        Ok(()) => {
+                            app.library.storage_error = None;
+                            "Learning state saved".into()
+                        }
+                        Err(e) => {
+                            let message = format!(
+                                "{e} Learning change is session-only; choose it again to retry."
+                            );
+                            app.library.storage_error = Some(message.clone());
+                            message
+                        }
+                    });
+                }
+                Reply::Error(error) => {
+                    app.library.storage_error = Some(error.clone());
+                    app.library.notice = Some(error);
+                }
+            }
+            app.library.revision += 1;
+        }
+
         if !interpret_busy && let Some(request) = app.pending_interpretations.pop_front() {
             interpret_busy = true;
             let tx = interpret_tx.clone();
@@ -155,6 +195,18 @@ pub async fn run(
     // Clean restore regardless of how the loop ended.
     let _ = execute!(stdout(), DisableMouseCapture);
     ratatui::restore();
+    // Flush actions even when a final state key and quit arrive in one burst.
+    flush_library(&mut app, &library_tx);
+    drop(library_tx);
+    let _ = library_worker.await;
+    // A shutdown write failure must be visible after the alternate screen closes.
+    while let Ok(reply) = library_rx.try_recv() {
+        if let crate::patterns::storage::Reply::Error(error)
+        | crate::patterns::storage::Reply::Saved(Err(error)) = reply
+        {
+            eprintln!("{error}");
+        }
+    }
     result
 }
 
@@ -201,4 +253,39 @@ fn route(
         return false;
     }
     handler::handle_event(event, app)
+}
+
+fn flush_library(
+    app: &mut App,
+    tx: &tokio::sync::mpsc::UnboundedSender<crate::patterns::storage::Request>,
+) {
+    use crate::patterns::storage::Request;
+    if app.library.refresh_requested {
+        app.library.refresh_requested = false;
+        for o in app.library.current.values() {
+            app.library.pending.insert(
+                (o.session.clone(), o.agent.clone(), o.call.clone()),
+                o.clone(),
+            );
+        }
+        let _ = tx.send(Request::Refresh);
+    }
+    if !app.library.pending.is_empty() {
+        let rows = std::mem::take(&mut app.library.pending)
+            .into_values()
+            .collect();
+        if tx.send(Request::Index(rows)).is_err() {
+            app.library.notice =
+                Some("Local library unavailable; this recording remains inspectable.".into());
+        }
+    }
+    for (key, state) in std::mem::take(&mut app.library.choices) {
+        if tx.send(Request::Set(key, state)).is_err() {
+            app.library.saving = app.library.saving.saturating_sub(1);
+            let message =
+                "Learning change is session-only: local storage is unavailable.".to_string();
+            app.library.storage_error = Some(message.clone());
+            app.library.notice = Some(message);
+        }
+    }
 }

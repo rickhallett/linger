@@ -6,6 +6,8 @@ use ratatui::{
     widgets::BorderType,
 };
 
+pub const PRACTISING: Color = Color::Rgb(229, 199, 54); // Osaka bright_yellow
+
 pub const BORDER: BorderType = BorderType::Plain;
 pub const SELECTION_RAIL: &str = "▌ ";
 pub const GRID: Color = Color::Rgb(35, 55, 43); // #23372B

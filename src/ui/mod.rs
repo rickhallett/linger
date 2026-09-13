@@ -12,6 +12,7 @@
 pub(crate) mod chips;
 pub(crate) mod edges;
 pub(crate) mod inspector;
+pub(crate) mod library;
 pub(crate) mod nodes;
 pub(crate) mod panel;
 pub(crate) mod theme;
@@ -25,7 +26,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Sparkline, SparklineBar};
 
 use crate::state::session::LogKind;
-use crate::state::{App, Camera, Mode, Transport};
+use crate::state::{App, Camera, Transport};
 
 /// Render the entire UI for one frame.
 ///
@@ -60,7 +61,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     // playhead is drawn over.
     app.scrubber_area = None;
 
-    if app.inspector.is_some() {
+    if app.library.view.is_some() {
+        library::render(frame, canvas_area, app);
+    } else if app.inspector.is_some() {
         inspector::render(frame, canvas_area, app);
     } else {
         // Copy the selected agent id out *before* borrowing the flow mutably for
@@ -406,6 +409,22 @@ fn render_scrubber(frame: &mut Frame, area: Rect, app: &mut App) {
                     ("◇", bg.fg(palette.subtle))
                 };
                 buf[(x(col), marker_y)].set_symbol(glyph).set_style(style);
+            }
+        }
+        // Practising is personal attention, not execution status. Reveal a
+        // marker only once its recorded input is at or behind the playhead.
+        let practising = app
+            .library
+            .practising_events(&app.timeline.items, app.timeline.generation);
+        for &index in practising {
+            if index >= app.timeline.folded {
+                continue;
+            }
+            let col = (app.timeline.bar_fraction_for_index(index) * last).round() as usize;
+            if col < width {
+                buf[(x(col), marker_y)]
+                    .set_symbol("◎")
+                    .set_style(bg.fg(theme::PRACTISING).add_modifier(Modifier::BOLD));
             }
         }
         // Event markers, PAST only (reveal as the playhead reaches them — in sync
@@ -784,7 +803,11 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         Camera::Manual => {}
     }
 
-    if let Some(err) = &app.last_error {
+    if let Some(err) = app
+        .last_error
+        .as_ref()
+        .or(app.library.storage_error.as_ref())
+    {
         left.push(Span::styled(
             format!("  ⚠ {}", truncate(err, 50)),
             bg.fg(palette.error).add_modifier(Modifier::BOLD),
@@ -798,11 +821,7 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         "q quit · "
     };
-    let hints = if app.mode == Mode::Replay {
-        format!("{quit}? help · space pause")
-    } else {
-        format!("{quit}? help")
-    };
+    let hints = format!("b patterns · {quit}? help");
 
     // Reserve the hint area in terminal CELLS, not bytes: the hints contain
     // multibyte glyphs (`·` is 2 bytes, the arrows 3 each), so `str::len()`

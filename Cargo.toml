@@ -49,6 +49,7 @@ native = [
   "dep:anyhow",
   "dep:reqwest",
   "dep:dotenvy",
+  "dep:rusqlite",
   "ratatui/crossterm",
   "rataflow/crossterm",
 ]
@@ -91,6 +92,9 @@ anyhow = { version = "1", optional = true }
 # copying it, which is what makes a snapshot ladder rung O(1).
 imbl = "7.0.1"
 dotenvy = { version = "0.15", optional = true }
+shell-words = "1.1"
+rusqlite = { version = "0.40", features = ["bundled"], optional = true }
+sha2 = "0.10"
 
 # The library's own wasm requirement, independent of any frontend: chrono needs
 # its wasm time binding for `Utc::now()` to work in-browser. A browser backend

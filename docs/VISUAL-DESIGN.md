@@ -22,7 +22,7 @@ The selected call has a solid left rail and a filled row; the active evidence ta
 
 Terminal fonts remain the user's choice. Typography is expressed through weight, spacing and hierarchy, not bundled fonts. No decorative pre-headings. Preserve readable input/output and the evidence distinction as density increases.
 
-`src/ui/theme.rs` owns the semantic palette, frame shape and selection style. Views consume those roles. Give future Practising states a distinct symbol and treatment instead of overloading live/success green; detailed learning-state styling is deferred until that feature exists.
+`src/ui/theme.rs` owns the semantic palette, frame shape and selection style. Views consume those roles. Practising uses a yellow `◎` (`#E5C736`, Osaka bright_yellow) in the inspector, library and timeline. It remains distinct from live/success green and failure red.
 
 ## Source and adaptation
 

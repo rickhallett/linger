@@ -49,3 +49,5 @@ pub mod tui;
 pub mod inspector;
 #[cfg(feature = "native")]
 pub mod interpretation;
+
+pub mod patterns;

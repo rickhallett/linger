@@ -21,6 +21,15 @@ pub fn handle_event(event: &Event, app: &mut App) -> bool {
     match event {
         Event::Key(key) => handle_key(key, app),
         Event::Mouse(mouse) => {
+            if let Some(view) = &mut app.library.view {
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => view.scroll = view.scroll.saturating_add(3),
+                    MouseEventKind::ScrollUp => view.scroll = view.scroll.saturating_sub(3),
+                    _ => {}
+                }
+                return false;
+            }
+
             if app.inspector.is_some() {
                 match mouse.kind {
                     MouseEventKind::ScrollDown => {
@@ -79,11 +88,18 @@ fn handle_key(key: &KeyEvent, app: &mut App) -> bool {
     if ctrl && matches!(key.code, KeyCode::Char('c' | 'C')) {
         return true;
     }
+    if app.library.view.is_some() {
+        return library_key(key, app);
+    }
     if app.inspector.is_some() && inspector_key(key, app) {
         return false;
     }
 
     match key.code {
+        KeyCode::Char('b') => {
+            app.open_library();
+            return false;
+        }
         KeyCode::Enter => {
             app.open_inspector();
             return false;
@@ -312,6 +328,11 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
             }
         }
         KeyCode::Enter => i.detail = true,
+        KeyCode::Char('b') => app.open_library(),
+        KeyCode::Char('p') => app.mark_inspected(crate::patterns::Learning::Practising),
+        KeyCode::Char('w') => app.mark_inspected(crate::patterns::Learning::Want),
+        KeyCode::Char('L') => app.mark_inspected(crate::patterns::Learning::Learned),
+        KeyCode::Char('u') => app.mark_inspected(crate::patterns::Learning::Unmarked),
         KeyCode::Char('v') => {
             i.raw = !i.raw;
             i.scroll = 0;
@@ -378,6 +399,66 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
         _ => {}
     }
     true
+}
+
+fn library_key(key: &KeyEvent, app: &mut App) -> bool {
+    use crate::patterns::Learning;
+    let view = app.library.view.as_mut().unwrap();
+    if view.searching {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => view.searching = false,
+            KeyCode::Backspace => {
+                view.query.pop();
+            }
+            KeyCode::Char(c) => view.query.push(c),
+            _ => {}
+        }
+        return false;
+    }
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('b') => app.library.view = None,
+        KeyCode::Char('q') => return true,
+        KeyCode::Tab => {
+            view.all = !view.all;
+            view.scroll = 0;
+            view.example = 0;
+        }
+        KeyCode::Char('H') => view.show_learned = !view.show_learned,
+        KeyCode::Char('/') => {
+            view.query.clear();
+            view.searching = true;
+        }
+        KeyCode::Char('j') | KeyCode::Down => app.library.move_row(1),
+        KeyCode::Char('k') | KeyCode::Up => app.library.move_row(-1),
+        KeyCode::Char('h') | KeyCode::Left => {
+            view.example = view.example.saturating_sub(1);
+            view.scroll = 0;
+        }
+        KeyCode::Char('l') | KeyCode::Right => {
+            view.example = view.example.saturating_add(1);
+            view.scroll = 0;
+        }
+        KeyCode::PageDown => view.scroll = view.scroll.saturating_add(12),
+        KeyCode::PageUp => view.scroll = view.scroll.saturating_sub(12),
+        KeyCode::Enter => app.open_pattern_occurrence(),
+        KeyCode::Char('r') => {
+            app.library.refresh_requested = true;
+            app.library.notice = Some("Refreshing cache…".into());
+        }
+        KeyCode::Char(c @ ('w' | 'p' | 'L' | 'u')) => {
+            let state = match c {
+                'w' => Learning::Want,
+                'p' => Learning::Practising,
+                'L' => Learning::Learned,
+                _ => Learning::Unmarked,
+            };
+            if let Some(key) = app.library.selected().map(|r| r.key.clone()) {
+                app.library.choose(key, state);
+            }
+        }
+        _ => {}
+    }
+    false
 }
 
 #[cfg(test)]

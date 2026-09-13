@@ -149,6 +149,7 @@ struct Snapshot {
 /// [`tui`](crate::tui) loop and the browser crate. They are frontend plumbing
 /// rather than an interface to build on, and carry no stability promise.
 pub struct App {
+    pub library: crate::patterns::Library,
     pub inspector: Option<crate::inspector::Inspector>,
     pub interpretation_revision: u64,
     pub pending_interpretations:
@@ -238,6 +239,7 @@ impl App {
     /// configured flow and a fresh model.
     pub fn new(session_id: String, mode: Mode) -> Self {
         App {
+            library: Default::default(),
             inspector: None,
             interpretation_revision: 0,
             pending_interpretations: Default::default(),
@@ -384,6 +386,8 @@ impl App {
                 if !self.is_current(&session_id) {
                     return;
                 }
+                self.library
+                    .observe(&session_id, statements.iter().flat_map(|s| s.facts.iter()));
                 // Route session-level metadata to the info store, whichever
                 // record carried it; only real activity (timestamped / dated)
                 // goes on the timeline.
@@ -456,6 +460,8 @@ impl App {
                 if !self.is_current(&session_id) {
                     return;
                 }
+                self.library
+                    .observe(&session_id, items.iter().flat_map(|s| s.facts.iter()));
                 // Bulk hand-off: the App owns pacing from here. Fold the first
                 // moment immediately so t=0 renders; `tick_timeline` paces on.
                 self.session_info = info;
@@ -478,6 +484,7 @@ impl App {
                 // there would clobber a camera/pin choice the user made while
                 // waiting for the session to appear.
                 let genuine = !self.is_current(&session_id) || self.flow.nodes().count() > 0;
+                self.library.reset(&session_id);
                 self.current_session_id = session_id.clone();
                 self.session = SessionModel::new(session_id);
                 self.inspector = None;

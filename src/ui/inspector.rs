@@ -39,7 +39,10 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 Span::styled(format!("{} / {} calls", safe_text(&i.agent), count), bg),
                 Span::styled(format!("    {} events ahead", buffered), muted),
             ]),
-            Line::styled(" Enter drill in · Esc back · space pause", muted),
+            Line::styled(
+                " Enter drill in · Esc back · space pause · b patterns · p Practising",
+                muted,
+            ),
         ])
         .style(bg),
         heading,
@@ -65,8 +68,25 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 crate::state::session::ToolState::Ok => "✓",
                 crate::state::session::ToolState::Err => "✗",
             };
+            let learning = app.library.state_for_call(&i.agent, &c.id);
             ListItem::new(vec![
-                Line::from(format!("{} {}", glyph, safe_text(&c.name))),
+                Line::styled(
+                    format!(
+                        "{} {}{}",
+                        glyph,
+                        if learning == crate::patterns::Learning::Practising {
+                            "◎ "
+                        } else {
+                            ""
+                        },
+                        safe_text(&c.name)
+                    ),
+                    if learning == crate::patterns::Learning::Practising {
+                        bg.fg(super::theme::PRACTISING).add_modifier(Modifier::BOLD)
+                    } else {
+                        bg
+                    },
+                ),
                 Line::styled(
                     format!("  {}", safe_text(c.summary.as_deref().unwrap_or(&c.id))),
                     muted,
@@ -150,7 +170,19 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
             i.lines.len()
         )
     };
-    let status = i.notice.clone().unwrap_or_else(|| {
+    let learning = i
+        .call
+        .as_ref()
+        .map(|call| app.library.state_for_call(&i.agent, call))
+        .unwrap_or_default();
+    let status = app.library.storage_error.clone().or_else(|| i.notice.clone()).unwrap_or_else(|| {
+        if learning != crate::patterns::Learning::Unmarked {
+            return format!(
+                " {} {} · w Want · p Practising · L Learned · u Unmarked",
+                learning.mark(),
+                learning.label()
+            );
+        }
         if i.tab == Tab::Interpret {
             " Interpretation uses selected input/output; raw evidence stays in the other tabs."
                 .into()
