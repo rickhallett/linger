@@ -22,7 +22,7 @@ Install with Rust 1.88 or newer, or download an Apple Silicon or Intel macOS bin
 [Website and guide](https://lingerer.xyz) · [Release process](docs/RELEASING.md)
 
 ```sh
-cargo install linger --version 0.1.0 --locked
+cargo install --git https://github.com/rickhallett/linger --tag runtime-v0.1.0 --locked
 linger                         # newest session for the current project
 linger /path/to/project        # follow another project
 linger /path/to/session.jsonl  # replay a recording

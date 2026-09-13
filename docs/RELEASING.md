@@ -7,7 +7,7 @@ Linger has one repository and two independently versioned release tracks. The ru
 | Runtime | Cargo.toml | Checks on PR/main; prerelease `runtime-vX.Y.Z-rc.N` tags build macOS artifacts in `runtime-preview` | `runtime-vX.Y.Z` publishes crates.io and GitHub archives in `runtime-production` |
 | Website | web/package.json | Same-repository PRs and main deploy to `website-preview`; forks build without secrets | `website-vX.Y.Z` deploys to `website-production` and records a GitHub release |
 
-Tags must match their manifest exactly. Production website tags must be stable versions. Runtime and website tags may reference different commits. Do not reuse or move a published tag. Release only reviewed, committed source; do not capture an active working tree with `--allow-dirty`.
+Tags must match their manifest exactly. Production website tags must be stable versions. Runtime and website tags may reference different commits. Do not reuse or move a published tag. Repository rules prevent release-tag updates/deletion and main force pushes/deletion. Release only reviewed, committed source; do not capture an active working tree with `--allow-dirty`.
 
 ## Runtime
 
@@ -38,3 +38,7 @@ Both website environments need `VERCEL_TOKEN`. Repository variables hold `VERCEL
 123 Reg retains DNS hosting. Apex A records point to Vercel's project recommendations; www uses the project CNAME and Vercel redirects it to the apex with HTTP 308. Preserve unrelated NS, SOA, mail and verification records. Re-read Vercel's domain recommendations before future DNS changes.
 
 For rollback, promote a previously verified Vercel production deployment using the Vercel dashboard/CLI. Record the selected deployment and verify the public domain. Runtime fixes require a new version/tag; never overwrite a released crate or asset.
+
+## Initial registry handoff
+
+The macOS release can be downloaded before crates.io onboarding finishes. Until then, install from the exact `runtime-v0.1.0` Git tag. After account verification and a valid Cargo token are available, publish from that tag in a clean worktree, configure Trusted Publishing, update the existing GitHub release notes, and switch website install copy back to crates.io in a new website release. Do not move `runtime-v0.1.0` or include newer development source.

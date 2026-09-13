@@ -2,7 +2,7 @@
   "name": "linger-web",
   "type": "module",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Linger terminal inspector website",
   "scripts": {
     "dev": "astro dev --config astro.linger.config.mjs",
