@@ -1,18 +1,18 @@
 # Linger website
 
-The canonical design is **Osaka Jade**, based on the former Orange variant and retaining its copy and interactive inspector. The operator selected it on 13 September 2026.
+This branch contains a **project-page exploration**, requested on 13 September 2026: plain prose, restrained typography and captured terminal interactions. It is a preview awaiting selection. Production remains the Osaka Jade design on main.
 
 ## Active source
 
-- `linger/pages/index.astro`: canonical homepage.
+- `linger/pages/index.astro`: exploration homepage.
 - `linger/pages/guide.astro`: setup, controls and current limits.
-- `linger/styles/site.css`: shared Osaka Jade website styles.
+- `linger/styles/site.css`: shared project-page and guide styles.
 - `linger/public/favicon.svg`: site icon.
 - `astro.linger.config.mjs`: active Astro configuration.
 
 `pnpm dev` starts the local site; `pnpm build` generates `dist/`. Only `/` and `/guide/` are published by this build. Production is https://lingerer.xyz on Vercel project `linger-website`. See [the release process](../docs/RELEASING.md) for PR previews and automatic production deployment from main.
 
-The inspector uses `../examples/repair.jsonl` as a fictional fixture at build time. Its reference notes are authored demonstration content. Website interactions do not run terminal commands or make model requests. Check product claims against the current repository documentation when changing copy.
+The demo switches between SVG captures of the actual terminal cell buffer in `linger/public/terminal/`. They were captured on 13 September 2026 from the active development build using `../examples/repair.jsonl`, at 120 columns by 32 rows, with isolated temporary data and model keys removed. The selected command and its documentation connector come from the app itself. The page captions are authored explanations. The development UI is ahead of the tagged 0.1.0 download, which the page identifies. Refresh captures through the terminal when the UI changes; do not redraw fictional app behavior. Website interactions do not run terminal commands or make model requests. Check product claims against the current repository documentation when changing copy.
 
 The palette follows `../docs/VISUAL-DESIGN.md`. Preserve readable input/output, keyboard controls, and the distinction between recorded evidence and interpretation. No eyebrow elements.
 
