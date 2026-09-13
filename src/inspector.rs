@@ -19,6 +19,7 @@ pub struct Inspector {
     pub call: Option<String>,
     pub detail: bool,
     pub raw: bool,
+    pub nowrap: bool,
     pub content_width: usize,
     pub tab: Tab,
     pub scroll: usize,
@@ -170,6 +171,7 @@ impl App {
             &i.call,
             i.tab as u8,
             i.raw,
+            i.nowrap,
             i.content_width,
             self.interpretation_revision,
             self.explorer.revision,
@@ -234,11 +236,8 @@ impl App {
         i.lines = safe_text(&content)
             .split('\n')
             .flat_map(|line| {
-                if matches!(i.tab, Tab::Explain | Tab::Interpret)
-                    && i.content_width > 0
-                    && !line.is_empty()
-                {
-                    crate::ui::wrap(line, i.content_width, usize::MAX)
+                if !i.nowrap && i.content_width > 0 && !line.is_empty() {
+                    wrap_evidence_line(line, i.content_width)
                 } else {
                     vec![line.to_string()]
                 }
@@ -279,6 +278,32 @@ impl App {
         self.timeline.follow_head = false;
         self.commit_inspector_seek(target);
     }
+}
+
+// Preserve indentation and every character: wrapping changes display rows only.
+fn wrap_evidence_line(line: &str, width: usize) -> Vec<String> {
+    use unicode_width::UnicodeWidthChar;
+    let mut rows = Vec::new();
+    let mut rest = line;
+    while !rest.is_empty() {
+        let mut columns = 0;
+        let mut boundary = None;
+        let mut cut = rest.len();
+        for (at, c) in rest.char_indices() {
+            let size = c.width().unwrap_or(0);
+            if at > 0 && columns + size > width {
+                cut = boundary.unwrap_or(at);
+                break;
+            }
+            columns += size;
+            if c.is_whitespace() {
+                boundary = Some(at + c.len_utf8());
+            }
+        }
+        rows.push(rest[..cut].to_string());
+        rest = &rest[cut..];
+    }
+    rows
 }
 
 fn readable_input(text: &str) -> String {

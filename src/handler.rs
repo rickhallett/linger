@@ -357,6 +357,11 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
         KeyCode::Char('w') => app.mark_inspected(crate::patterns::Learning::Want),
         KeyCode::Char('L') => app.mark_inspected(crate::patterns::Learning::Learned),
         KeyCode::Char('u') => app.mark_inspected(crate::patterns::Learning::Unmarked),
+        KeyCode::Char('W') => {
+            i.nowrap = !i.nowrap;
+            i.horizontal = 0;
+            i.scroll = 0;
+        }
         KeyCode::Char('v') => {
             i.raw = !i.raw;
             i.scroll = 0;
@@ -418,14 +423,14 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
         KeyCode::Char('h') | KeyCode::Left => {
             if i.tab == Tab::Explain && i.detail {
                 app.move_command_part(-1);
-            } else {
+            } else if i.nowrap {
                 i.horizontal = i.horizontal.saturating_sub(4);
             }
         }
         KeyCode::Char('l') | KeyCode::Right => {
             if i.tab == Tab::Explain && i.detail {
                 app.move_command_part(1);
-            } else {
+            } else if i.nowrap {
                 i.horizontal = i.horizontal.saturating_add(4);
             }
         }

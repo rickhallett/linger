@@ -11,8 +11,10 @@ use ratatui::{
 };
 
 pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
+    let [_, content_area] =
+        Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]).areas(area);
     if let Some(i) = &mut app.inspector {
-        i.content_width = (usize::from(area.width) * 70 / 100).saturating_sub(10);
+        i.content_width = usize::from(content_area.width).saturating_sub(9).max(1);
     }
     app.refresh_inspector();
     let Some(i) = &app.inspector else { return };
@@ -204,16 +206,19 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         })
         .collect();
     frame.render_widget(
-        Paragraph::new(lines).scroll((0, i.horizontal)).style(bg),
+        Paragraph::new(lines)
+            .scroll((0, if i.nowrap { i.horizontal } else { 0 }))
+            .style(bg),
         inner,
     );
     let help = if i.searching {
         format!(" /{}▏  Enter find · Esc cancel", safe_text(&i.query))
     } else if i.tab == Tab::Explain {
-        " 1–4 tabs · h/l parts · j/k scroll · i Mercury · / search · Esc calls".into()
+        " 1–4 tabs · h/l parts · j/k scroll · W wrap · i Mercury · / search · Esc calls".into()
     } else {
         format!(
-            " 1–4 tabs · v raw/readable · i Mercury · / search · n next · h/l pan · PgUp/PgDn scroll   {}/{}",
+            " 1–4 tabs · v raw/readable · i Mercury · / search · n next · W {} · PgUp/PgDn   {}/{}",
+            if i.nowrap { "wrap (h/l pan)" } else { "unwrap" },
             scroll + 1,
             i.lines.len()
         )

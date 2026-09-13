@@ -346,10 +346,43 @@ fn explanation_keys_step_parts_without_changing_other_tab_navigation() {
     assert_eq!(a.inspector.as_ref().unwrap().horizontal, 0);
     key(&mut a, '2');
     key(&mut a, 'l');
+    assert_eq!(a.inspector.as_ref().unwrap().horizontal, 0);
+    key(&mut a, 'W');
+    key(&mut a, 'l');
     assert_eq!(a.inspector.as_ref().unwrap().horizontal, 4);
+    key(&mut a, 'W');
+    assert_eq!(a.inspector.as_ref().unwrap().horizontal, 0);
     key(&mut a, '3');
     key(&mut a, '/');
     key(&mut a, 'h');
     assert_eq!(a.inspector.as_ref().unwrap().query, "h");
     assert_eq!(a.inspector.as_ref().unwrap().part, 1);
+}
+
+#[test]
+fn every_tab_wraps_without_losing_evidence_and_reflows_after_resize() {
+    use unicode_width::UnicodeWidthStr;
+    let mut a = app();
+    for tab in [Tab::Input, Tab::Output, Tab::Explain, Tab::Interpret] {
+        let i = a.inspector.as_mut().unwrap();
+        i.tab = tab;
+        i.content_width = 12;
+        i.nowrap = true;
+        a.refresh_inspector();
+        let original = a.inspector.as_ref().unwrap().lines.concat();
+        a.inspector.as_mut().unwrap().nowrap = false;
+        a.refresh_inspector();
+        let i = a.inspector.as_ref().unwrap();
+        assert_eq!(i.lines.concat(), original);
+        assert!(i.lines.iter().all(|line| line.width() <= 12));
+        let narrow = i.lines.len();
+        a.inspector.as_mut().unwrap().content_width = 80;
+        a.refresh_inspector();
+        assert!(a.inspector.as_ref().unwrap().lines.len() < narrow);
+    }
+    let code = "    print('界界界界界界界界界界')  # keep  spaces";
+    let rows = super::wrap_evidence_line(code, 16);
+    assert_eq!(rows.concat(), code);
+    assert!(rows[0].starts_with("    "));
+    assert!(rows.iter().all(|line| line.width() <= 16));
 }

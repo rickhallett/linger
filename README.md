@@ -39,13 +39,14 @@ Press **Enter** to open the tool inspector. Pick a call with **j/k**, then **Ent
 | j/k or ↑/↓ | Select calls, or scroll focused content |
 | 1 / 2 | Recorded input / output |
 | v | Toggle readable / raw payload view |
+| W | Toggle word wrap (on by default in all inspector tabs) |
 | 3 or e | Explore command parts (h/l steps between parts) |
 | 4 | View interpretation for this evidence snapshot |
 | i inside inspector | Ask Mercury about selected input/output |
 | R inside inspector | Retry interpretation |
 | / then Enter | Search the current content |
 | n | Next search match |
-| h/l or ←/→ | Select a command part; otherwise pan input/output |
+| h/l or ←/→ | Select a command part; otherwise pan unwrapped content |
 | PgUp / PgDn | Scroll content vertically |
 | , / . | Previous / next recorded event |
 | [ / ] | Previous / next prompt boundary |
@@ -54,6 +55,8 @@ Press **Enter** to open the tool inspector. Pick a call with **j/k**, then **Ent
 | s in graph | Toggle idle-gap compression |
 | ? in graph | Graph controls and help |
 | q / Ctrl-C | Quit (q is ordinary text during search) |
+
+Input, Output, Command notes and Interpretation wrap to the pane width by default, including raw payloads. Wrapping preserves indentation and spacing; it only changes display rows. Press **W** for unwrapped content.
 
 Live ingestion continues while the inspector is open. Selection and reading position stay fixed. Time navigation changes the evidence available: a later result is not shown at an earlier playhead.
 
@@ -150,6 +153,7 @@ cargo build --release --locked
 uv run --with pyte python scripts/terminal-smoke.py
 uv run --with pyte python scripts/pattern-smoke.py
 uv run --with pyte python scripts/guide-smoke.py
+uv run --with pyte python scripts/wrap-smoke.py
 # With the optional local manpage pack installed:
 python3 scripts/explainshell-check.py
 uv run --with pyte python scripts/exploration-smoke.py

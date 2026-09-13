@@ -37,3 +37,9 @@ The first guide passed 248 library tests and 9 CLI tests, formatting, Clippy wit
 `scripts/guide-smoke.py` exercises three real 120×40 terminal processes with fictional recordings and one isolated cache: growth from four to five entries, search, highlighted current and cached-only specimens, notes surviving restart, bounded specimen cycling, jumping to the correct output, returning to the entry, and Practising propagation. Existing inspector and three-process pattern terminal checks also pass. Gallery and entry terminal-cell renders were visually inspected. No provider requests were made.
 
 This is a local first version for hands-on use. Cached-only forms retain representative input, not every cross-session specimen or output. Large personal-library performance and sustained use are not measured by these fixtures.
+
+## Default inspector wrapping — 13 September 2026
+
+All four inspector tabs now wrap by default, including raw payloads, while preserving spaces and indentation. `W` toggles unwrapped reading and resets horizontal offset; h/l still selects command parts. The native release passed 249 library tests plus 9 CLI tests, formatting, Clippy with warnings denied and the portable-core check. Regressions cover all tabs, resize reflow, Unicode/spacing preservation, cached rendering and wrap/pan interaction.
+
+`scripts/wrap-smoke.py` verified long input/output tails, raw input, toggling wrapping, search/vertical scrolling and the Interpretation placeholder in a real 120×40 terminal. The captured wrapped input was visually reviewed. Existing command-explorer/structural-frequency terminal checks passed, including selected-part navigation, argv exploration and missing-backend fallback. All evidence was fictional; no provider requests were made.
