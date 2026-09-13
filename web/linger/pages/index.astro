@@ -1,119 +1,26 @@
 ---
 import '../styles/site.css';
-const repo = 'https://github.com/rickhallett/linger';
-const install = 'cargo install --git https://github.com/rickhallett/linger --tag runtime-v0.1.0 --locked';
+import '../styles/journey.css';
+import Project from '../components/JourneyProject.astro';
 ---
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Linger — read what your agent ran</title>
-  <meta name="description" content="A terminal app for reading Claude Code and Codex sessions. Inspect the commands, look up unfamiliar parts, and keep a field guide of what you learn." />
-  <link rel="canonical" href={new URL('/', Astro.site)} />
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-</head>
-<body>
-<div class="background-study" aria-hidden="true"></div>
-<a class="skip" href="#main">Skip to content</a>
-<header class="shell nav">
-  <a class="wordmark" href="/" aria-label="Linger home">[ linger ]</a>
-  <nav aria-label="Main navigation"><a href={repo}>Source</a><a href="/guide/">Guide</a><a href="#install">Install</a></nav>
-</header>
-<main id="main" class="shell">
-  <section class="introduction">
-    <h1>Read what your agent actually ran.</h1>
-    <p>Linger opens Claude Code and Codex sessions in your terminal. Step through the tool calls, inspect their inputs and outputs, and look up the parts of a command you don’t recognise.</p>
-    <p>When something is worth coming back to, keep the example and write yourself a note.</p>
-  </section>
-
-  <figure class="exhibit" id="demo">
-    <div class="view-controls" role="group" aria-label="Choose a terminal view">
-      <button data-view="input" aria-pressed="false">Input</button>
-      <button data-view="command" aria-pressed="true">Command</button>
-      <button data-view="output" aria-pressed="false">Output</button>
-      <button data-view="guide" aria-pressed="false">Field guide</button>
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="description" content="A terminal app for reading Claude Code and Codex sessions. Inspect the commands, look up unfamiliar parts, and keep a field guide of what you learn."/><link rel="canonical" href={new URL('/', Astro.site)}/><title>Linger — go back, look closer</title><link rel="icon" href="/favicon.svg"/><noscript><style>.journey-scroll{display:none}.journey-project{opacity:1;margin-top:0;pointer-events:auto}.journey-nav{color:#263c33}</style></noscript></head>
+<body class="journey-page">
+<header class="journey-nav"><a class="journey-brand" href="/">[ linger ]</a><nav aria-label="Main navigation"><a href="#project-main" id="skip-journey">Skip to Linger</a></nav></header>
+<div class="landing-phosphor" aria-hidden="true"><div><img src="/backgrounds/phosphor.png" alt=""/><img src="/backgrounds/phosphor.png" alt=""/></div></div>
+<section class="journey-scroll" aria-label="From a session to a command">
+  <div class="journey-viewport">
+    <div class="green-curtains" aria-hidden="true"><div></div><div></div></div>
+    <div id="journey-three" aria-hidden="true"></div><div id="journey-pixels" aria-hidden="true"></div>
+    <div class="journey-copy time-copy"><h1>Go back.<br/>Look closer.</h1><p>The run moves on. You can stay with the part you want to understand.</p></div>
+    <div class="journey-copy matter-copy" inert><h2>Read it, piece<br/>by piece.</h2><p>A command becomes less mysterious when you can point to the part you don’t understand.</p></div>
+    <div class="travel-cue"><span>Scroll through the session</span><div aria-hidden="true"><i></i></div></div>
+    <div class="journey-anatomy" inert>
+      <div class="journey-parts" role="group" aria-label="Select a syntax part"><button data-syntax="0" aria-pressed="false">sed</button><button data-syntax="1" aria-pressed="true">-n</button><button data-syntax="2" aria-pressed="false">'8,16p'</button><button data-syntax="3" aria-pressed="false">src/main.py</button></div>
+      <div class="journey-definition" aria-live="polite"><h3 id="syntax-name">-n</h3><p id="syntax-description">Turn off automatic printing. Let the expression decide which lines appear.</p></div>
     </div>
-    <div class="terminal-viewport" tabindex="0" aria-label="Captured terminal interface. Use left and right arrows to inspect command parts.">
-      <img id="terminal-frame" src="/terminal/command-1.svg" width="1200" height="672" alt="Linger showing the -n flag selected in a sed command, connected to its documentation." fetchpriority="high" />
-    </div>
-    <div class="part-controls" id="part-controls" role="group" aria-label="Command parts">
-      <span class="part-prompt">Inspect a part:</span>
-      <button data-part="0" aria-pressed="false">sed</button>
-      <button data-part="1" aria-pressed="true">-n</button>
-      <button data-part="2" aria-pressed="false">'8,16p'</button>
-      <button data-part="3" aria-pressed="false">src/main.py</button>
-    </div>
-  </figure>
-
-  <section class="project-note prose">
-    <h2>A place to stop and read.</h2>
-    <p>An agent can finish a task using commands you’ve never written yourself. You get the result, but some of the work can remain unfamiliar.</p>
-    <p>Linger keeps the call, its output and the surrounding session close together. You can follow a run as it happens or move back through a recording. Earlier moments show only the evidence that was available then.</p>
-    <p>The field guide grows from calls you inspect. Keep examples of a command, add a note, and mark what you want to understand or practise. It stays on your machine.</p>
-    <p>Reading a transcript never executes its commands. Command documentation works locally with an optional pack. You can also request a model interpretation of a selected call; <a href="/guide/#interpretation">that sends its evidence to your configured provider</a>.</p>
-  </section>
-
-  <section id="install" class="installation prose">
-    <h2>Install Linger</h2>
-    <p><a href={`${repo}/releases/download/runtime-v0.1.0/linger-0.1.0-aarch64-apple-darwin.tar.gz`}>macOS / Apple Silicon</a><span class="download-separator" aria-hidden="true">&nbsp; / &nbsp;</span><a href={`${repo}/releases/download/runtime-v0.1.0/linger-0.1.0-x86_64-apple-darwin.tar.gz`}>macOS / Intel</a></p>
-    <p>Or build the 0.1.0 release with Rust 1.88 or newer:</p>
-    <div class="install-command"><pre id="install-command"><code>{install}</code></pre><button id="copy-install" aria-label="Copy install command">Copy</button></div>
-    <p class="copy-status" id="copy-status" role="status"></p>
-    <p>Run <code>linger</code> from a project directory, or pass it a session file. The <a href="/guide/">guide</a> covers keyboard controls and the optional documentation pack.</p>
-    <p class="small">Early software. macOS binaries are not Apple Developer ID signed or notarized. Linux binary distribution is still to be decided. <a href={`${repo}/releases/tag/runtime-v0.1.0`}>Checksums and release notes</a>.</p>
-  </section>
-</main>
-<footer class="shell footer"><p>Built on <a href="https://github.com/furkankly/zoetrope">Zoetrope</a>, by Furkan Kalaycioglu.<br />Linger is independent, open-source software.</p><a href={`${repo}/blob/main/LICENSE`}>MIT licence</a></footer>
-<script>
-  // Phosphor is the selected background; earlier studies remain available by URL.
-  const background = new URLSearchParams(location.search).get('background') ?? 'phosphor';
-  const studies: Record<string, number> = {phosphor: 0.12, fold: 0.10, etching: 0.09};
-  if (background && Object.hasOwn(studies, background)) {
-    const layer = document.querySelector<HTMLElement>('.background-study')!;
-    const art = new Image();
-    art.alt = '';
-    art.addEventListener('load', () => {
-      layer.style.setProperty('--art-opacity', String(studies[background]));
-      if (background === 'phosphor') {
-        const track = document.createElement('div');
-        track.className = 'phosphor-scroll';
-        track.append(art, art.cloneNode());
-        layer.append(track);
-      } else {
-        layer.append(art);
-      }
-      requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('visible')));
-    });
-    art.src = `/backgrounds/${background}.png`;
-  }
-  let view = 'command';
-  let part = 1;
-  const image = document.querySelector<HTMLImageElement>('#terminal-frame')!;
-  const partControls = document.querySelector<HTMLElement>('#part-controls')!;
-  const views = [...document.querySelectorAll<HTMLButtonElement>('[data-view]')];
-  const parts = [...document.querySelectorAll<HTMLButtonElement>('[data-part]')];
-  function render() {
-    image.src = `/terminal/${view === 'command' ? `command-${part}` : view}.svg`;
-    image.alt = view === 'command' ? `Linger showing ${parts[part].textContent} selected and connected to its explanation.` : `Linger ${view} view of a fictional sed call.`;
-    views.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
-    parts.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===part)));
-    partControls.hidden = view !== 'command';
-  }
-  views.forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view!;render();}));
-  parts.forEach((b,i)=>b.addEventListener('click',()=>{part=i;render();}));
-  document.querySelector('#demo')!.addEventListener('keydown',(event)=>{
-    const e = event as KeyboardEvent;
-    if(view === 'command' && ['ArrowLeft','ArrowRight'].includes(e.key)) {
-      e.preventDefault();part=(part+(e.key==='ArrowRight'?1:3))%4;render();
-      if((e.target as HTMLElement).hasAttribute('data-part'))parts[part].focus();
-    }
-  });
-  document.querySelector('#copy-install')!.addEventListener('click',async()=>{
-    const status=document.querySelector<HTMLElement>('#copy-status')!;
-    try {await navigator.clipboard.writeText(document.querySelector('#install-command')!.textContent!);status.textContent='Copied.';}
-    catch {status.textContent='Select the command above to copy it.';}
-  });
-</script>
-</body>
-</html>
+    <div class="journey-status" role="status"></div>
+  </div>
+</section>
+<div class="journey-project"><Project/></div>
+<script>import { startJourney } from '../scripts/journey';startJourney();</script>
+</body></html>

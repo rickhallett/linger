@@ -1,0 +1,79 @@
+---
+const repo = 'https://github.com/rickhallett/linger';
+const install = 'cargo install --git https://github.com/rickhallett/linger --tag runtime-v0.1.0 --locked';
+---
+<main id="project-main" class="shell">
+  <section class="introduction">
+    <h1>Read what your agent actually ran.</h1>
+    <p>Linger opens Claude Code and Codex sessions in your terminal. Step through the tool calls, inspect their inputs and outputs, and look up the parts of a command you don’t recognise.</p>
+    <p>When something is worth coming back to, keep the example and write yourself a note.</p>
+  </section>
+
+  <figure class="exhibit" id="demo">
+    <div class="view-controls" role="group" aria-label="Choose a terminal view">
+      <button data-view="input" aria-pressed="false">Input</button>
+      <button data-view="command" aria-pressed="true">Command</button>
+      <button data-view="output" aria-pressed="false">Output</button>
+      <button data-view="guide" aria-pressed="false">Field guide</button>
+    </div>
+    <div class="terminal-viewport" tabindex="0" aria-label="Captured terminal interface. Use left and right arrows to inspect command parts.">
+      <img id="terminal-frame" src="/terminal/command-1.svg" width="1200" height="672" alt="Linger showing the -n flag selected in a sed command, connected to its documentation." fetchpriority="high" />
+    </div>
+    <div class="part-controls" id="part-controls" role="group" aria-label="Command parts">
+      <span class="part-prompt">Inspect a part:</span>
+      <button data-part="0" aria-pressed="false">sed</button>
+      <button data-part="1" aria-pressed="true">-n</button>
+      <button data-part="2" aria-pressed="false">'8,16p'</button>
+      <button data-part="3" aria-pressed="false">src/main.py</button>
+    </div>
+  </figure>
+
+  <section class="project-note prose">
+    <h2>A place to stop and read.</h2>
+    <p>An agent can finish a task using commands you’ve never written yourself. You get the result, but some of the work can remain unfamiliar.</p>
+    <p>Linger keeps the call, its output and the surrounding session close together. You can follow a run as it happens or move back through a recording. Earlier moments show only the evidence that was available then.</p>
+    <p>The field guide grows from calls you inspect. Keep examples of a command, add a note, and mark what you want to understand or practise. It stays on your machine.</p>
+    <p>Reading a transcript never executes its commands. Command documentation works locally with an optional pack. You can also request a model interpretation of a selected call; <a href="/guide/#interpretation">that sends its evidence to your configured provider</a>.</p>
+  </section>
+
+  <section id="install" class="installation prose">
+    <h2>Install Linger</h2>
+    <p><a href={`${repo}/releases/download/runtime-v0.1.0/linger-0.1.0-aarch64-apple-darwin.tar.gz`}>macOS / Apple Silicon</a><span class="download-separator" aria-hidden="true">&nbsp; / &nbsp;</span><a href={`${repo}/releases/download/runtime-v0.1.0/linger-0.1.0-x86_64-apple-darwin.tar.gz`}>macOS / Intel</a></p>
+    <p>Or build the 0.1.0 release with Rust 1.88 or newer:</p>
+    <div class="install-command"><pre id="install-command"><code>{install}</code></pre><button id="copy-install" aria-label="Copy install command">Copy</button></div>
+    <p class="copy-status" id="copy-status" role="status"></p>
+    <p>Run <code>linger</code> from a project directory, or pass it a session file. The <a href="/guide/">guide</a> covers keyboard controls and the optional documentation pack.</p>
+    <p class="small">Early software. macOS binaries are not Apple Developer ID signed or notarized. Linux binary distribution is still to be decided. <a href={`${repo}/releases/tag/runtime-v0.1.0`}>Checksums and release notes</a>.</p>
+  </section>
+</main>
+<footer class="shell footer"><p>Built on <a href="https://github.com/furkankly/zoetrope">Zoetrope</a>, by Furkan Kalaycioglu.<br />Linger is independent, open-source software.</p><a href={`${repo}/blob/main/LICENSE`}>MIT licence</a></footer>
+<script>
+  let view = 'command';
+  let part = 1;
+  const image = document.querySelector<HTMLImageElement>('#terminal-frame')!;
+  const partControls = document.querySelector<HTMLElement>('#part-controls')!;
+  const views = [...document.querySelectorAll<HTMLButtonElement>('[data-view]')];
+  const parts = [...document.querySelectorAll<HTMLButtonElement>('[data-part]')];
+  function render() {
+    image.src = `/terminal/${view === 'command' ? `command-${part}` : view}.svg`;
+    image.alt = view === 'command' ? `Linger showing ${parts[part].textContent} selected and connected to its explanation.` : `Linger ${view} view of a fictional sed call.`;
+    views.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
+    parts.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===part)));
+    partControls.hidden = view !== 'command';
+  }
+  views.forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view!;render();}));
+  parts.forEach((b,i)=>b.addEventListener('click',()=>{part=i;render();}));
+  document.querySelector('#demo')!.addEventListener('keydown',(event)=>{
+    const e = event as KeyboardEvent;
+    if(view === 'command' && ['ArrowLeft','ArrowRight'].includes(e.key)) {
+      e.preventDefault();part=(part+(e.key==='ArrowRight'?1:3))%4;render();
+      if((e.target as HTMLElement).hasAttribute('data-part'))parts[part].focus();
+    }
+  });
+  document.querySelector('#copy-install')!.addEventListener('click',async()=>{
+    const status=document.querySelector<HTMLElement>('#copy-status')!;
+    try {await navigator.clipboard.writeText(document.querySelector('#install-command')!.textContent!);status.textContent='Copied.';}
+    catch {status.textContent='Select the command above to copy it.';}
+  });
+
+</script>

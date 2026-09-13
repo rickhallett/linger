@@ -4,7 +4,7 @@ src
 benches
 assets
 docs
-scripts
+/scripts
 .github
 web/src
 web/public

@@ -1,10 +1,12 @@
 # Linger website
 
-The canonical website is the **project page with scrolling Phosphor**, selected for production on 13 September 2026: plain prose, restrained typography and captured terminal interactions against a subtle jade background.
+The canonical website is the **continuous journey**, selected for production on 13 September 2026: accelerating travel through 32 code panels, glyph particles assembling into an inspectable command, then a pale project page with captured terminal interactions and scrolling Phosphor.
 
 ## Active source
 
-- `linger/pages/index.astro`: canonical homepage.
+- `linger/pages/index.astro`: canonical continuous homepage.
+- `linger/scripts/journey.ts` and `linger/styles/journey.css`: Three.js 0.186 / PixiJS 8.20 scroll sequence.
+- `linger/components/JourneyProject.astro`: approved project copy and captured walkthrough.
 - `linger/pages/guide.astro`: setup, controls and current limits.
 - `linger/styles/site.css`: shared project-page and guide styles.
 - `linger/public/favicon.svg`: site icon.
@@ -29,3 +31,9 @@ The inherited Zoetrope `src/`, `public/`, `wasm/` and `astro.config.mjs` remain 
 ## Background studies
 
 Retained background study query parameters `?background=phosphor`, `?background=fold` and `?background=etching` show image-generated art from `linger/public/backgrounds/`. Phosphor is selected as the default background at 12% opacity, with a seamless 55-second upward scroll and a 1.8-second initial fade. Reduced-motion preference removes both animation and transition. Fold (10%) and etching (9%) remain available by query for comparison. Original PNGs and full built-in image-generation prompts are retained locally in the root checkout at `outputs/background-studies-2026-09-13/`.
+
+## Arrival animation
+
+The camera passes through 32 authored code panels with a curved scroll-to-distance mapping. Particles sampled from the panels form the command, with HTML buttons for inspecting its four parts. The green field opens onto the project page. Native scrolling reverses the sequence; the navigation skip link leads directly to the content. Reduced motion fixes the camera and switches assembled states. GPU startup failure preserves the skip link; without JavaScript, the project content is shown directly. Rendering pauses in hidden tabs and after the project content arrives. Renderer resolution is capped at 1.5x. Three.js uses WebGPU with its WebGL2 fallback. Commands are authored examples and are never executed.
+
+Earlier `/spaces/` experiments remain in the separate local `website/graphics-studies` worktree. They are not part of production routes or navigation. The previous plain homepage is retained in Git history at `a9887d3`.
