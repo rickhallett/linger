@@ -63,7 +63,7 @@ fn exact(tool: &str, command: &str, kind: &str) -> Pattern {
 
 // Split only unquoted composition operators. Reject grammar we don't model;
 // quote removal itself is delegated to shell-words. Quoted literals stay opaque.
-fn segments(s: &str) -> Option<Vec<(&str, &'static str)>> {
+pub(super) fn segments(s: &str) -> Option<Vec<(&str, &'static str)>> {
     let mut quote = None;
     let mut escape = false;
     let mut start = 0;
@@ -126,7 +126,7 @@ fn segments(s: &str) -> Option<Vec<(&str, &'static str)>> {
     out.push((&s[start..], ""));
     Some(out)
 }
-fn usage(s: &str) -> Option<String> {
+pub(super) fn usage(s: &str) -> Option<String> {
     let words = shell_words::split(s).ok()?;
     let exe = words.first()?.as_str();
     let args = &words[1..];
@@ -266,6 +266,6 @@ fn usage(s: &str) -> Option<String> {
     }
 }
 
-fn key(value: &serde_json::Value) -> String {
+pub(super) fn key(value: &serde_json::Value) -> String {
     format!("v1:{:x}", Sha256::digest(value.to_string().as_bytes()))
 }

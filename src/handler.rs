@@ -347,6 +347,8 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
         }
         KeyCode::Char('3' | 'e') => {
             i.tab = Tab::Explain;
+            i.detail = true;
+            i.horizontal = 0;
             i.scroll = 0;
         }
         KeyCode::Char('4') => {
@@ -389,8 +391,20 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
                 .min(i.lines.len().saturating_sub(1))
         }
         KeyCode::PageUp => i.scroll = i.scroll.saturating_sub(15),
-        KeyCode::Char('h') | KeyCode::Left => i.horizontal = i.horizontal.saturating_sub(4),
-        KeyCode::Char('l') | KeyCode::Right => i.horizontal = i.horizontal.saturating_add(4),
+        KeyCode::Char('h') | KeyCode::Left => {
+            if i.tab == Tab::Explain && i.detail {
+                app.move_command_part(-1);
+            } else {
+                i.horizontal = i.horizontal.saturating_sub(4);
+            }
+        }
+        KeyCode::Char('l') | KeyCode::Right => {
+            if i.tab == Tab::Explain && i.detail {
+                app.move_command_part(1);
+            } else {
+                i.horizontal = i.horizontal.saturating_add(4);
+            }
+        }
         KeyCode::Tab | KeyCode::BackTab => i.detail = !i.detail,
         KeyCode::Home => i.scroll = 0,
         KeyCode::Char('q' | 'Q' | ',' | '.' | '[' | ']' | 'g' | 'G' | ' ') | KeyCode::End => {
@@ -423,6 +437,12 @@ fn library_key(key: &KeyEvent, app: &mut App) -> bool {
             view.scroll = 0;
             view.example = 0;
         }
+        KeyCode::Char('f') => {
+            view.level = view.level.next();
+            view.scroll = 0;
+            view.example = 0;
+        }
+        KeyCode::Char('S') => view.show_scripts = !view.show_scripts,
         KeyCode::Char('H') => view.show_learned = !view.show_learned,
         KeyCode::Char('/') => {
             view.query.clear();

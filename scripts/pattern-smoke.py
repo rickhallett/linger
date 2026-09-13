@@ -43,26 +43,27 @@ class Session:
             os.close(self.master)
         assert self.process.returncode==0
 
-with tempfile.TemporaryDirectory(prefix='linger-pattern-pty-') as data_dir:
-    with Session('examples/repair.jsonl',data_dir) as terminal:
-        terminal.key(b'b/rg -n\r');terminal.expect('rg -n <pattern> <path>')
-        terminal.key(b'p');terminal.expect('Learning state saved');terminal.expect('Practising')
-        terminal.key(b'\r');terminal.expect('TODO handle empty input');terminal.expect('◎')
-        terminal.capture('practising-inspector')
-    with Session('examples/patterns.jsonl',data_dir) as terminal:
-        terminal.key(b'b/rg -n\r');terminal.expect('Practising')
-        terminal.expect('3 here');terminal.expect('4 all');terminal.expect('2 sessions')
-        terminal.key(b'\t');terminal.expect('All cached sessions');terminal.capture('patterns-library')
-        terminal.key(b'l');terminal.expect('Occurrence 2/3');terminal.expect('rg -n empty tests')
-        terminal.key(b'L');terminal.expect('No patterns in this view.');terminal.expect('Learning state saved')
-    with Session('examples/repair.jsonl',data_dir) as terminal:
-        terminal.key(b'b/rg -n\r');terminal.expect('No patterns in this view.')
-        terminal.key(b'H');terminal.expect('Learned');terminal.expect('4 all');terminal.expect('1 here')
-        terminal.key(b'p');terminal.expect('Practising');terminal.expect('Learning state saved')
-        terminal.key(b'\r');terminal.expect('TODO handle empty input');terminal.expect('◎')
-        terminal.key(b'b');terminal.expect('4 all');terminal.capture('patterns-reopened')
-    conn=sqlite3.connect(str(Path(data_dir)/'patterns.sqlite3'))
-    assert conn.execute('SELECT COUNT(*) FROM occurrences').fetchone()[0]==9
-    assert conn.execute('SELECT COUNT(DISTINCT session) FROM occurrences').fetchone()[0]==2
-    conn.close()
-print(json.dumps({'terminal':'120x40 PTY','runs':3,'distinct_sessions':2,'unique_calls':9,'checks':['cross-session frequency','reopen deduplication','persistent Practising','persistent Learned','hide Learned','occurrence preview','jump to recorded output','Practising inspector marker'],'provider_requests':0}))
+if __name__ == '__main__':
+    with tempfile.TemporaryDirectory(prefix='linger-pattern-pty-') as data_dir:
+        with Session('examples/repair.jsonl',data_dir) as terminal:
+            terminal.key(b'b/rg -n\r');terminal.expect('rg -n <pattern> <path>')
+            terminal.key(b'p');terminal.expect('Learning state saved');terminal.expect('Practising')
+            terminal.key(b'\r');terminal.expect('TODO handle empty input');terminal.expect('◎')
+            terminal.capture('practising-inspector')
+        with Session('examples/patterns.jsonl',data_dir) as terminal:
+            terminal.key(b'b/rg -n\r');terminal.expect('Practising')
+            terminal.expect('3 here');terminal.expect('4 all');terminal.expect('2 sessions')
+            terminal.key(b'\t');terminal.expect('All cached sessions');terminal.capture('patterns-library')
+            terminal.key(b'l');terminal.expect('Occurrence 2/3');terminal.expect('rg -n empty tests')
+            terminal.key(b'L');terminal.expect('No patterns in this view.');terminal.expect('Learning state saved')
+        with Session('examples/repair.jsonl',data_dir) as terminal:
+            terminal.key(b'b/rg -n\r');terminal.expect('No patterns in this view.')
+            terminal.key(b'H');terminal.expect('Learned');terminal.expect('4 all');terminal.expect('1 here')
+            terminal.key(b'p');terminal.expect('Practising');terminal.expect('Learning state saved')
+            terminal.key(b'\r');terminal.expect('TODO handle empty input');terminal.expect('◎')
+            terminal.key(b'b');terminal.expect('4 all');terminal.capture('patterns-reopened')
+        conn=sqlite3.connect(str(Path(data_dir)/'patterns.sqlite3'))
+        assert conn.execute('SELECT COUNT(*) FROM occurrences').fetchone()[0]==9
+        assert conn.execute('SELECT COUNT(DISTINCT session) FROM occurrences').fetchone()[0]==2
+        conn.close()
+    print(json.dumps({'terminal':'120x40 PTY','runs':3,'distinct_sessions':2,'unique_calls':9,'checks':['cross-session frequency','reopen deduplication','persistent Practising','persistent Learned','hide Learned','occurrence preview','jump to recorded output','Practising inspector marker'],'provider_requests':0}))

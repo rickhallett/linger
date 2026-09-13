@@ -17,3 +17,6 @@ tmp-*.gif
 /outputs/
 .env
 .env.*
+
+# Python checks import the shared terminal fixture.
+/scripts/__pycache__/

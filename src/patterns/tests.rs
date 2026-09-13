@@ -120,6 +120,7 @@ fn counts_keep_occurrences_and_session_spread_distinct_and_selection_stable() {
         example: p.command,
         tool: p.tool,
         sessions: BTreeMap::from([("old".into(), 9), ("current".into(), 1)]),
+        ..Default::default()
     });
     a.view = Some(View::default());
     a.refresh_view();
@@ -332,9 +333,11 @@ mod persistence {
         drop(store);
         let store = Store::open(&dir.0).unwrap();
         let stats = store.aggregates().unwrap();
-        assert_eq!(stats.len(), 1);
-        assert_eq!(stats[0].sessions.values().sum::<usize>(), 3);
-        assert_eq!(stats[0].sessions.len(), 2);
+        assert_eq!(stats.len(), 2); // usage combination and program projection
+        for row in &stats {
+            assert_eq!(row.sessions.values().sum::<usize>(), 3);
+            assert_eq!(row.sessions.len(), 2);
+        }
         assert_eq!(
             store.states().unwrap()[&rows[0].pattern.key],
             Learning::Practising
@@ -346,6 +349,48 @@ mod persistence {
         assert_eq!(
             store.states().unwrap()[&rows[0].pattern.key],
             Learning::Practising
+        );
+    }
+    #[test]
+    fn cached_wrapper_projections_rebuild_from_existing_occurrences() {
+        let dir = Scratch::new();
+        let mut store = Store::open(&dir.0).unwrap();
+        for session in ["s1", "s2"] {
+            let mut library = Library::default();
+            library.observe(
+                session,
+                argv_facts(
+                    "a",
+                    &["/bin/zsh", "-lc", "rg -n first src && rg -n second tests"],
+                    0,
+                )
+                .iter(),
+            );
+            library.observe(
+                session,
+                argv_facts("b", &["/bin/zsh", "-lc", "python3 -c 'print(42)'"], 1).iter(),
+            );
+            let rows: Vec<_> = library.current.values().cloned().collect();
+            store.index(&rows).unwrap();
+            store.index(&rows).unwrap();
+        }
+        drop(store);
+        let store = Store::open(&dir.0).unwrap();
+        let rows = store.aggregates().unwrap();
+        let wrapper = rows
+            .iter()
+            .find(|r| r.level == Level::Wrappers && r.label == "/bin/zsh -lc")
+            .unwrap();
+        assert_eq!(wrapper.sessions.values().sum::<usize>(), 4);
+        assert_eq!(wrapper.sessions.len(), 2);
+        let rg = rows
+            .iter()
+            .find(|r| r.label == "rg -n <pattern> <path>")
+            .unwrap();
+        assert_eq!(rg.sessions.values().sum::<usize>(), 2);
+        assert!(
+            rows.iter()
+                .any(|r| r.inline && r.example.contains("print(42)"))
         );
     }
     #[test]
@@ -373,4 +418,106 @@ mod persistence {
             "fictional damaged bytes"
         );
     }
+}
+
+fn argv_facts(call: &str, argv: &[&str], time: i64) -> Vec<Fact> {
+    let mut records = facts(call, "unused", time);
+    for f in &mut records {
+        if let FactKind::ToolEvidence {
+            output: false,
+            text,
+            ..
+        } = &mut f.kind
+        {
+            *text = serde_json::json!({"command": argv}).to_string().into();
+        }
+    }
+    records
+}
+
+#[test]
+fn structural_levels_count_wrappers_and_inner_commands_once_per_call() {
+    let mut library = Library::default();
+    library.observe(
+        "one",
+        argv_facts(
+            "a",
+            &["/bin/zsh", "-lc", "rg -n foo src && rg -n bar tests"],
+            0,
+        )
+        .iter(),
+    );
+    library.observe(
+        "one",
+        argv_facts("b", &["/bin/zsh", "-lc", "git status --short"], 1).iter(),
+    );
+    library.observe("one", facts("c", "rg -n baz lib", 2).iter());
+    library.view = Some(View::default());
+    library.refresh_view();
+    let rows = &library.view.as_ref().unwrap().rows;
+    let rg = rows
+        .iter()
+        .find(|r| r.label == "rg -n <pattern> <path>")
+        .unwrap();
+    assert_eq!(rg.here, 2); // two rg segments in call a still count as one call
+    assert_eq!(library.examples(&rg.key).len(), 2);
+    assert!(
+        rows.iter()
+            .any(|r| r.label == "/bin/zsh -lc → git status --short")
+    );
+    library.view.as_mut().unwrap().level = Level::Programs;
+    library.refresh_view();
+    let zsh = library
+        .view
+        .as_ref()
+        .unwrap()
+        .rows
+        .iter()
+        .find(|r| r.label == "/bin/zsh")
+        .unwrap();
+    assert_eq!(zsh.here, 2);
+    let key = zsh.key.clone();
+    library.choose(key, Learning::Practising);
+    assert_eq!(library.state_for_call("main", "a"), Learning::Practising);
+    library.view.as_mut().unwrap().level = Level::Wrappers;
+    library.refresh_view();
+    let rows = &library.view.as_ref().unwrap().rows;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].label, "/bin/zsh -lc");
+    assert_eq!(rows[0].here, 2);
+}
+
+#[test]
+fn inline_scripts_are_hidden_but_search_and_toggle_recover_originals() {
+    let mut library = Library::default();
+    library.observe(
+        "one",
+        facts("a", "python3 - <<'PY'\nprint('unique-script')\nPY", 0).iter(),
+    );
+    library.observe(
+        "one",
+        argv_facts("b", &["/bin/zsh", "-lc", "python3 -c 'print(42)'"], 1).iter(),
+    );
+    library.view = Some(View::default());
+    library.refresh_view();
+    assert!(library.view.as_ref().unwrap().rows.is_empty());
+    library.view.as_mut().unwrap().query = "unique-script".into();
+    library.refresh_view();
+    assert_eq!(library.view.as_ref().unwrap().rows.len(), 1);
+    assert!(
+        library
+            .selected()
+            .unwrap()
+            .example
+            .contains("unique-script")
+    );
+    library.view.as_mut().unwrap().query.clear();
+    library.view.as_mut().unwrap().show_scripts = true;
+    library.refresh_view();
+    assert_eq!(library.view.as_ref().unwrap().rows.len(), 2);
+    library.view.as_mut().unwrap().show_scripts = false;
+    library.view.as_mut().unwrap().level = Level::Wrappers;
+    library.refresh_view();
+    assert_eq!(library.selected().unwrap().label, "/bin/zsh -lc");
+    assert_eq!(library.current.len(), 2);
 }

@@ -17,7 +17,7 @@ The operator completed a visual pass of the first build. A live Mercury 2.5 requ
 
 ## Personal attention
 
-Implemented on the pattern-library branch:
+Implemented locally:
 
 - Conservative command/usage/composition grouping, retaining original occurrences.
 - Session and cross-session frequency distributions; separate raw occurrences from distinct-session spread.
@@ -30,7 +30,8 @@ The first index accumulates opened sessions, supports bounded usage forms and ex
 
 ## Richer explanation and replay
 
-- Syntax-span selection and documentation matched to command/platform/version.
+- Implemented: local documentation-span selection through the optional explainshell backend, with source/extractor labels, unknown coverage and stable selection. Manual platform/version matching to the actual execution host remains open.
+- Implemented: inline-script filtering, searchable retained scripts and structural frequency levels for programs, wrappers and combinations. General token combinations and richer relationships remain open.
 - Selected output ranges and interpretation follow-ups.
 - Episode selection, loops, pacing around Practising patterns and cross-session comparisons.
 - Editable workflow-stage annotations with their underlying calls visible.

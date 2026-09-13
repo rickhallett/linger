@@ -12,6 +12,16 @@ Inline code, heredocs, expansions, redirection and unfamiliar command options re
 
 Keys are SHA-256 digests of versioned, explicitly serialized pattern descriptions. `usage-v1` and `exact-v1` distinguish the two modes. Changing normalization rules requires a new key version and an explicit state migration decision; do not silently transfer a Learned label to a different pattern.
 
+## Structural levels and inline scripts
+
+The default Combinations view hides inline script bodies. `S` includes them; a nonempty search searches and displays matching scripts. This filters rows, never deletes observations. Common Python stdin/`-c`, Node/Ruby/Perl eval forms and code tools are recognized conservatively; this is not arbitrary language classification.
+
+`f` cycles Combinations, Programs and Wrappers. A recognized shell argument array such as `["/bin/zsh", "-lc", "rg -n needle src"]` contributes `/bin/zsh` and `rg` to Programs, `/bin/zsh -lc` to Wrappers, and both the wrapper-plus-inner usage and the inner usage to Combinations. Supported pipelines contribute their full shape and constituent command forms. Literal executable paths and flag order remain significant. Only bounded shell `-c` forms are unwrapped; positional shell arguments and unfamiliar flags stay opaque. General token-subset mining is deferred.
+
+Each row counts distinct **calls containing the form**, at most once within a call even when a pipeline repeats it. Rows and levels overlap, so summing them does not yield unique calls. `Tab` changes session scope independently of structural level. Existing exact/usage identities remain retained; new projections use `structure-v1` keys. They are rebuilt from existing cache observations without changing the SQLite schema or deleting learning choices.
+
+Learning states belong to the selected form. Marking a program or wrapper Practising highlights calls containing it; learning one form does not automatically mark its enclosing combinations Learned. Current-recording previews/jumps work for each structural level. The preview highlights the selected form inside its original input. Shell quote removal and JSON decoding retain source-byte mappings; a wrapper highlights only its executable/flags, and an inner program highlights its command position, not same-word arguments or metadata. Multiple occurrences within one call are all highlighted. Cached-only examples use the same mapping. Unsupported source locations remain unhighlighted and are labelled rather than guessed. Cached search uses retained exact inputs and the available aggregate examples, not a full-text transcript search.
+
 ## Counts and time
 
 Rows rank by occurrence frequency in the selected scope. They separately show the current recording count, cached occurrence count, and the number of distinct sessions. All-time means observed by Linger, not every transcript on the machine. Patterns are not outcomes and frequency is not an importance score.

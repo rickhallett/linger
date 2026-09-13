@@ -68,7 +68,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 crate::state::session::ToolState::Ok => "✓",
                 crate::state::session::ToolState::Err => "✗",
             };
-            let learning = app.library.state_for_call(&i.agent, &c.id);
+            let learning = app.visible_learning(&i.agent, &c.id);
             ListItem::new(vec![
                 Line::styled(
                     format!(
@@ -114,7 +114,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let title = [
         (Tab::Input, "1 Input"),
         (Tab::Output, "2 Output"),
-        (Tab::Explain, "3 Reference"),
+        (Tab::Explain, "3 Command"),
         (Tab::Interpret, "4 Interpretation"),
     ]
     .into_iter()
@@ -135,8 +135,54 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .title(Line::from(title))
         .border_style(if i.detail { accent } else { border })
         .style(bg);
-    let inner = block.inner(detail_area);
+    let mut inner = block.inner(detail_area);
     frame.render_widget(block, detail_area);
+    if i.tab == Tab::Explain && !i.command_lines.is_empty() {
+        let height = (i.command_lines.len() as u16)
+            .min(6)
+            .min(inner.height / 3)
+            .max(1);
+        let [command_area, hint_area, reading_area] = Layout::vertical([
+            Constraint::Length(height),
+            Constraint::Length(2),
+            Constraint::Fill(1),
+        ])
+        .areas(inner);
+        let first = i
+            .command_row
+            .saturating_sub(height as usize / 2)
+            .min(i.command_lines.len().saturating_sub(height as usize));
+        frame.render_widget(
+            Paragraph::new(
+                i.command_lines
+                    .iter()
+                    .skip(first)
+                    .take(height as usize)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+            .style(bg),
+            command_area,
+        );
+        frame.render_widget(
+            Paragraph::new(format!(
+                "h/l ←/→ parts · j/k scroll{}{}",
+                if i.command_from_argv {
+                    " · shell string from argv"
+                } else {
+                    ""
+                },
+                if i.command_lines.len() > height as usize {
+                    " · command excerpt"
+                } else {
+                    ""
+                }
+            ))
+            .style(muted),
+            hint_area,
+        );
+        inner = reading_area;
+    }
     let scroll = i.scroll.min(i.lines.len().saturating_sub(1));
     let query = i.query.to_lowercase();
     let lines: Vec<_> = i
@@ -163,6 +209,8 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     );
     let help = if i.searching {
         format!(" /{}▏  Enter find · Esc cancel", safe_text(&i.query))
+    } else if i.tab == Tab::Explain {
+        " 1–4 tabs · h/l parts · j/k scroll · i Mercury · / search · Esc calls".into()
     } else {
         format!(
             " 1–4 tabs · v raw/readable · i Mercury · / search · n next · h/l pan · PgUp/PgDn scroll   {}/{}",
@@ -173,7 +221,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let learning = i
         .call
         .as_ref()
-        .map(|call| app.library.state_for_call(&i.agent, call))
+        .map(|call| app.visible_learning(&i.agent, call))
         .unwrap_or_default();
     let status = app.library.storage_error.clone().or_else(|| i.notice.clone()).unwrap_or_else(|| {
         if learning != crate::patterns::Learning::Unmarked {
@@ -199,4 +247,60 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .style(bg),
         footer,
     );
+}
+
+/// Wrap the exact command once per changed selection/width. Highlight its byte
+/// range before sanitizing display characters, so Unicode/control bytes cannot
+/// shift the selected documentation away from its evidence.
+pub(crate) fn command_lines(
+    command: &str,
+    part: Option<&crate::exploration::Part>,
+    width: usize,
+) -> (Vec<Line<'static>>, usize) {
+    highlighted_lines(
+        command,
+        &part.map(|p| vec![(p.start, p.end)]).unwrap_or_default(),
+        width,
+    )
+}
+
+pub(crate) fn highlighted_lines(
+    command: &str,
+    ranges: &[(usize, usize)],
+    width: usize,
+) -> (Vec<Line<'static>>, usize) {
+    use unicode_width::UnicodeWidthChar;
+    let normal = Style::default().fg(super::theme::theme().palette().text);
+    let selected = super::theme::selected().add_modifier(Modifier::BOLD);
+    let mut lines = Vec::new();
+    let mut spans = Vec::new();
+    let mut columns = 0;
+    let mut focus = None;
+    for (offset, c) in command.char_indices() {
+        let active = ranges
+            .iter()
+            .any(|&(start, end)| start <= offset && offset < end);
+        if c == '\n' {
+            lines.push(Line::from(std::mem::take(&mut spans)));
+            columns = 0;
+            continue;
+        }
+        for display in safe_text(&c.to_string()).chars() {
+            let size = display.width().unwrap_or(0);
+            if columns > 0 && columns + size > width {
+                lines.push(Line::from(std::mem::take(&mut spans)));
+                columns = 0;
+            }
+            if active && focus.is_none() {
+                focus = Some(lines.len());
+            }
+            spans.push(Span::styled(
+                display.to_string(),
+                if active { selected } else { normal },
+            ));
+            columns += size;
+        }
+    }
+    lines.push(Line::from(spans));
+    (lines, focus.unwrap_or(0))
 }

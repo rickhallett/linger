@@ -7,7 +7,12 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod highlight;
 mod normalize;
+pub use highlight::ranges as highlight_ranges;
+mod structure;
+pub(crate) use structure::wrapper as shell_wrapper;
+pub use structure::{Level, projections};
 #[cfg(feature = "native")]
 pub mod storage;
 pub use normalize::pattern;
@@ -61,6 +66,8 @@ pub struct Aggregate {
     pub example: String,
     pub tool: String,
     pub sessions: BTreeMap<String, usize>,
+    pub level: Level,
+    pub inline: bool,
 }
 #[derive(Clone)]
 pub struct Row {
@@ -71,11 +78,15 @@ pub struct Row {
     pub here: usize,
     pub total: usize,
     pub spread: usize,
+    pub level: Level,
+    pub inline: bool,
 }
 #[derive(Default)]
 pub struct View {
     pub all: bool,
     pub show_learned: bool,
+    pub show_scripts: bool,
+    pub level: Level,
     pub selected: Option<String>,
     pub query: String,
     pub searching: bool,
@@ -84,7 +95,7 @@ pub struct View {
     pub rows: Vec<Row>,
     pub preview: Vec<ratatui::text::Line<'static>>,
     pub preview_stamp: Option<(u64, Option<String>, usize, u16)>,
-    stamp: Option<(u64, bool, bool, String)>,
+    stamp: Option<(u64, bool, bool, bool, Level, String)>,
 }
 #[derive(Default)]
 struct RawCall {
@@ -97,6 +108,7 @@ pub struct Library {
     pub session: String,
     raw: BTreeMap<(String, String), RawCall>,
     pub current: BTreeMap<(String, String), Occurrence>,
+    forms: BTreeMap<(String, String), Vec<structure::Projection>>,
     pub cached: Vec<Aggregate>,
     pub states: BTreeMap<String, Learning>,
     pub view: Option<View>,
@@ -116,6 +128,7 @@ impl Library {
         self.session = session.into();
         self.raw.clear();
         self.current.clear();
+        self.forms.clear();
         self.view = None;
         self.revision += 1;
     }
@@ -174,6 +187,8 @@ impl Library {
                         (session.into(), id.0.clone(), id.1.clone()),
                         occurrence.clone(),
                     );
+                    self.forms
+                        .insert(id.clone(), projections(&occurrence.pattern));
                     self.current.insert(id, occurrence);
                     self.revision += 1;
                 }
@@ -223,7 +238,21 @@ impl Library {
     pub fn state_for_call(&self, agent: &str, call: &str) -> Learning {
         self.current
             .get(&(agent.into(), call.into()))
-            .map(|o| self.learning(&o.pattern.key))
+            .map(|o| {
+                let exact = self.learning(&o.pattern.key);
+                if exact == Learning::Practising
+                    || self
+                        .forms
+                        .get(&(agent.into(), call.into()))
+                        .into_iter()
+                        .flatten()
+                        .any(|p| self.learning(&p.key) == Learning::Practising)
+                {
+                    Learning::Practising
+                } else {
+                    exact
+                }
+            })
             .unwrap_or_default()
     }
     pub fn choose(&mut self, key: String, state: Learning) {
@@ -239,6 +268,8 @@ impl Library {
             self.revision,
             view.all,
             view.show_learned,
+            view.show_scripts,
+            view.level,
             view.query.clone(),
         );
         if view.stamp.as_ref() == Some(&stamp) {
@@ -251,24 +282,30 @@ impl Library {
             .map(|a| (a.key.clone(), a))
             .collect();
         let mut here: BTreeMap<String, usize> = BTreeMap::new();
-        for o in self.current.values() {
-            *here.entry(o.pattern.key.clone()).or_default() += 1;
-            aggregates
-                .entry(o.pattern.key.clone())
-                .or_insert_with(|| Aggregate {
-                    key: o.pattern.key.clone(),
-                    label: o.pattern.label.clone(),
-                    example: o.pattern.command.clone(),
-                    tool: o.pattern.tool.clone(),
-                    sessions: Default::default(),
-                });
+        for (id, o) in &self.current {
+            for p in self.forms.get(id).into_iter().flatten() {
+                *here.entry(p.key.clone()).or_default() += 1;
+                aggregates
+                    .entry(p.key.clone())
+                    .or_insert_with(|| Aggregate {
+                        key: p.key.clone(),
+                        label: p.label.clone(),
+                        example: o.pattern.command.clone(),
+                        tool: o.pattern.tool.clone(),
+                        sessions: Default::default(),
+                        level: p.level,
+                        inline: p.inline,
+                    });
+            }
         }
         let query = view.query.to_lowercase();
         let mut rows: Vec<_> = aggregates
             .into_values()
             .filter_map(|mut a| {
                 let n = here.get(&a.key).copied().unwrap_or(0);
-                if (!view.all && n == 0)
+                if a.level != view.level
+                    || (a.inline && !view.show_scripts && query.is_empty())
+                    || (!view.all && n == 0)
                     || (!view.show_learned && self.learning(&a.key) == Learning::Learned)
                     || !format!("{} {}", a.label, a.example)
                         .to_lowercase()
@@ -288,6 +325,8 @@ impl Library {
                     here: n,
                     total: a.sessions.values().sum(),
                     spread: a.sessions.len(),
+                    level: a.level,
+                    inline: a.inline,
                 })
             })
             .collect();
@@ -335,7 +374,13 @@ impl Library {
         let mut rows: Vec<_> = self
             .current
             .values()
-            .filter(|o| o.pattern.key == key)
+            .filter(|o| {
+                self.forms
+                    .get(&(o.agent.clone(), o.call.clone()))
+                    .into_iter()
+                    .flatten()
+                    .any(|p| p.key == key)
+            })
             .collect();
         rows.sort_by(|a, b| a.order.cmp(&b.order).then_with(|| a.call.cmp(&b.call)));
         rows
@@ -343,6 +388,13 @@ impl Library {
 }
 
 impl App {
+    pub fn visible_learning(&self, agent: &str, call: &str) -> Learning {
+        if self.session.tool_evidence(agent, call, false).is_empty() {
+            Learning::Unmarked
+        } else {
+            self.library.state_for_call(agent, call)
+        }
+    }
     pub fn open_library(&mut self) {
         if self.library.view.is_none() {
             self.library.view = Some(View::default());
@@ -358,6 +410,13 @@ impl App {
         else {
             return;
         };
+        if self
+            .session
+            .tool_evidence(&o.agent, &o.call, false)
+            .is_empty()
+        {
+            return;
+        }
         self.library.choose(o.pattern.key.clone(), state);
     }
     pub fn open_pattern_occurrence(&mut self) {

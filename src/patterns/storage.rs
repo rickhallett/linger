@@ -100,17 +100,28 @@ impl Store {
             .map_err(db_error)?;
         for v in values {
             let (key, label, example, tool, session, count) = v.map_err(db_error)?;
-            grouped
-                .entry(key.clone())
-                .or_insert(Aggregate {
-                    key,
-                    label,
-                    example,
-                    tool,
-                    sessions: Default::default(),
-                })
-                .sessions
-                .insert(session, count);
+            let pattern = super::Pattern {
+                key,
+                label,
+                command: example.clone(),
+                tool: tool.clone(),
+            };
+            for p in super::projections(&pattern) {
+                *grouped
+                    .entry(p.key.clone())
+                    .or_insert(Aggregate {
+                        key: p.key,
+                        label: p.label,
+                        example: example.clone(),
+                        tool: tool.clone(),
+                        sessions: Default::default(),
+                        level: p.level,
+                        inline: p.inline,
+                    })
+                    .sessions
+                    .entry(session.clone())
+                    .or_default() += count;
+            }
         }
         Ok(grouped.into_values().collect())
     }

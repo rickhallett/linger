@@ -150,6 +150,7 @@ struct Snapshot {
 /// rather than an interface to build on, and carry no stability promise.
 pub struct App {
     pub library: crate::patterns::Library,
+    pub explorer: crate::exploration::Explorer,
     pub inspector: Option<crate::inspector::Inspector>,
     pub interpretation_revision: u64,
     pub pending_interpretations:
@@ -240,6 +241,7 @@ impl App {
     pub fn new(session_id: String, mode: Mode) -> Self {
         App {
             library: Default::default(),
+            explorer: Default::default(),
             inspector: None,
             interpretation_revision: 0,
             pending_interpretations: Default::default(),

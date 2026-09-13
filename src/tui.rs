@@ -57,6 +57,8 @@ pub async fn run(
 
     let (interpret_tx, mut interpret_rx) = mpsc::unbounded_channel();
     let mut interpret_busy = false;
+    let (explore_tx, mut explore_rx) = mpsc::unbounded_channel();
+    let mut explore_busy = false;
     let mut tick = tokio::time::interval(TICK);
     let mut last_tick = Instant::now();
     let mut last_status_tick = Instant::now();
@@ -108,6 +110,18 @@ pub async fn run(
             app.library.revision += 1;
         }
 
+        if !explore_busy && let Some(command) = app.explorer.pending.take() {
+            explore_busy = true;
+            let tx = explore_tx.clone();
+            tokio::spawn(async move {
+                let _ = tx.send(crate::exploration::run(command).await);
+            });
+        }
+        while let Ok((command, result)) = explore_rx.try_recv() {
+            explore_busy = false;
+            app.explorer.cache.insert(command, result);
+            app.explorer.revision = app.explorer.revision.wrapping_add(1);
+        }
         if !interpret_busy && let Some(request) = app.pending_interpretations.pop_front() {
             interpret_busy = true;
             let tx = interpret_tx.clone();

@@ -243,3 +243,113 @@ fn reference_reflows_on_resize_and_cached_frames_reuse_lines() {
     a.refresh_inspector();
     assert!(a.inspector.as_ref().unwrap().lines.len() < narrow);
 }
+
+#[test]
+fn command_selection_survives_output_but_never_reveals_future_input() {
+    use crate::exploration::Explanation;
+    let mut a = app();
+    a.inspector.as_mut().unwrap().tab = Tab::Explain;
+    a.refresh_inspector();
+    let command = a.explorer.pending.take().unwrap();
+    let explanation = serde_json::from_str::<Explanation>(r#"{"spans":[{"start":0,"end":2,"text":"Search files","source":"fictional documentation","extractor":"fixture","kind":"command","known":true},{"start":3,"end":5,"text":"Include line numbers","source":"fictional documentation","extractor":"fixture","kind":"option","known":true}]}"#).unwrap().validate(&command);
+    a.explorer.cache.insert(command.clone(), explanation);
+    a.explorer.revision += 1;
+    a.refresh_inspector();
+    a.move_command_part(1);
+    a.refresh_inspector();
+    assert!(
+        a.inspector
+            .as_ref()
+            .unwrap()
+            .lines
+            .join("\n")
+            .contains("Include line numbers")
+    );
+    a.handle_ui_event(UiEvent::Batch {
+        session_id: "test".into(),
+        statements: vec![crate::fact::Statement {
+            at: chrono::DateTime::from_timestamp(1_800_000_010, 0),
+            facts: vec![fact(
+                10,
+                FactKind::ToolEvidence {
+                    call: "a".into(),
+                    output: true,
+                    text: "additional output".into(),
+                },
+            )],
+        }],
+    });
+    a.refresh_inspector();
+    assert_eq!(a.inspector.as_ref().unwrap().part, 1);
+    assert!(a.explorer.pending.is_none());
+    let key = a
+        .library
+        .current
+        .get(&("main".into(), "a".into()))
+        .unwrap()
+        .pattern
+        .key
+        .clone();
+    a.library.choose(key, crate::patterns::Learning::Practising);
+    assert_eq!(
+        a.visible_learning("main", "a"),
+        crate::patterns::Learning::Practising
+    );
+    a.commit_inspector_seek(1); // tool start, before recorded input
+    assert_eq!(
+        a.visible_learning("main", "a"),
+        crate::patterns::Learning::Unmarked
+    );
+    a.refresh_inspector();
+    assert!(a.inspector.as_ref().unwrap().command.is_none());
+    assert!(a.inspector.as_ref().unwrap().command_lines.is_empty());
+    assert!(
+        !a.inspector
+            .as_ref()
+            .unwrap()
+            .lines
+            .join("\n")
+            .contains("Include line numbers")
+    );
+    a.go_live();
+    a.refresh_inspector();
+    assert_eq!(
+        a.inspector.as_ref().unwrap().command.as_ref(),
+        Some(&command)
+    );
+    assert_eq!(a.inspector.as_ref().unwrap().part, 0);
+}
+
+#[test]
+fn explanation_keys_step_parts_without_changing_other_tab_navigation() {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut a = app();
+    let key = |a: &mut App, c| {
+        crate::handler::handle_event(
+            &Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)),
+            a,
+        );
+    };
+    key(&mut a, '3');
+    a.refresh_inspector();
+    assert!(a.inspector.as_ref().unwrap().detail);
+    let command = a.explorer.pending.take().unwrap();
+    a.explorer.cache.insert(
+        command.clone(),
+        crate::exploration::Explanation::default().validate(&command),
+    );
+    a.explorer.revision += 1;
+    a.refresh_inspector();
+    key(&mut a, 'l');
+    a.refresh_inspector();
+    assert_eq!(a.inspector.as_ref().unwrap().part, 1);
+    assert_eq!(a.inspector.as_ref().unwrap().horizontal, 0);
+    key(&mut a, '2');
+    key(&mut a, 'l');
+    assert_eq!(a.inspector.as_ref().unwrap().horizontal, 4);
+    key(&mut a, '3');
+    key(&mut a, '/');
+    key(&mut a, 'h');
+    assert_eq!(a.inspector.as_ref().unwrap().query, "h");
+    assert_eq!(a.inspector.as_ref().unwrap().part, 1);
+}

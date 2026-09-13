@@ -28,6 +28,11 @@ pub struct Inspector {
     pub lines: Vec<String>,
     pub view_stamp: Option<u64>,
     pub notice: Option<String>,
+    pub command: Option<String>,
+    pub command_from_argv: bool,
+    pub part: usize,
+    pub command_lines: Vec<ratatui::text::Line<'static>>,
+    pub command_row: usize,
 }
 
 #[derive(Clone)]
@@ -90,6 +95,8 @@ impl App {
         i.scroll = 0;
         i.horizontal = 0;
         i.notice = None;
+        i.command = None;
+        i.part = 0;
     }
 
     pub fn inspector_evidence(&self) -> (String, String) {
@@ -165,6 +172,8 @@ impl App {
             i.raw,
             i.content_width,
             self.interpretation_revision,
+            self.explorer.revision,
+            i.part,
         )
             .hash(&mut signature);
         if let Some(call) = &i.call {
@@ -187,6 +196,8 @@ impl App {
         if i.view_stamp == Some(stamp) {
             return;
         }
+        self.prepare_exploration();
+        let i = self.inspector.as_ref().unwrap();
         let request = self.interpretation_request();
         let selected = self.inspected_call();
         let content = match (selected, request.as_ref()) {
@@ -196,7 +207,10 @@ impl App {
                     if call.state == ToolState::Pending { "No result recorded at this point in time. The call is pending.".into() }
                     else { "Tool completion was recorded, but no result body is available.".into() }
                 } else { if i.raw { r.output.clone() } else { readable_output(&r.output, 0) } },
-                Tab::Explain => r.reference.clone(),
+                Tab::Explain => i.command.as_ref().and_then(|cmd| self.explorer.cache.get(cmd).map(|e| {
+                    let notes = e.notes(cmd, i.part);
+                    if e.error.is_some() { format!("{notes}\n\n{}", r.reference) } else { notes }
+                })).unwrap_or_else(|| r.reference.clone()),
                 Tab::Interpret => self.interpretations.get(&r.key).cloned().unwrap_or_else(||
                     "No interpretation for this evidence snapshot. Press i to send this call's input and recorded output to Mercury.\n\nAn interpretation from another point in time is not reused when evidence changes.".into()),
             },
@@ -204,6 +218,19 @@ impl App {
         };
         let i = self.inspector.as_mut().unwrap();
         i.view_stamp = Some(stamp);
+        (i.command_lines, i.command_row) = i
+            .command
+            .as_ref()
+            .filter(|command| command.len() <= crate::exploration::MAX_COMMAND)
+            .map(|command| {
+                let part = self
+                    .explorer
+                    .cache
+                    .get(command)
+                    .and_then(|e| e.spans.get(i.part));
+                crate::ui::inspector::command_lines(command, part, i.content_width.max(1))
+            })
+            .unwrap_or_default();
         i.lines = safe_text(&content)
             .split('\n')
             .flat_map(|line| {

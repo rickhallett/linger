@@ -50,9 +50,10 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 ),
                 Span::styled(
                     format!(
-                        "  · {} patterns · Learned {}{}",
+                        " · {} · {} rows · scripts {}{}",
+                        v.level.label(),
                         v.rows.len(),
-                        if v.show_learned { "shown" } else { "hidden" },
+                        if v.show_scripts || !v.query.is_empty() { "included" } else { "hidden" },
                         if v.query.is_empty() {
                             String::new()
                         } else {
@@ -63,7 +64,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 ),
             ]),
             Line::styled(
-                " Tab scope · j/k select · h/l occurrence · Enter inspect · b/Esc return",
+                " Tab scope · f level · S scripts · j/k select · h/l occurrence · Enter inspect · b/Esc return",
                 dim,
             ),
         ])
@@ -170,7 +171,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     } else {
         "Loading local library…"
     });
-    frame.render_widget(Paragraph::new(vec![Line::styled(help,accent),Line::styled(" Counts cover whole opened recordings, independent of the playhead. No unseen sessions scanned.",dim),Line::styled(format!(" {status}"),dim)]).style(bg),footer);
+    frame.render_widget(Paragraph::new(vec![Line::styled(help,accent),Line::styled(" Counts are calls containing each form; rows overlap. Whole opened recordings, independent of playhead.",dim),Line::styled(format!(" {status}"),dim)]).style(bg),footer);
 }
 
 fn preview_lines(
@@ -210,7 +211,7 @@ fn preview_lines(
         lines.push(Line::raw(""));
         let examples = library.examples(&row.key);
         let n = v.example.min(examples.len().saturating_sub(1));
-        let (command, tool) = if let Some(o) = examples.get(n) {
+        let (command, tool, pattern) = if let Some(o) = examples.get(n) {
             lines.push(Line::styled(
                 format!(
                     "Occurrence {}/{} · {} · {}",
@@ -221,25 +222,55 @@ fn preview_lines(
                 ),
                 accent,
             ));
-            (o.pattern.command.as_str(), o.pattern.tool.as_str())
+            (
+                o.pattern.command.as_str(),
+                o.pattern.tool.as_str(),
+                o.pattern.clone(),
+            )
         } else {
             lines.push(Line::styled(
                 "Cached example · open its session for output",
                 accent,
             ));
-            (row.example.as_str(), row.tool.as_str())
+            (
+                row.example.as_str(),
+                row.tool.as_str(),
+                crate::patterns::pattern(&row.tool, &row.example)
+                    .or_else(|| {
+                        crate::patterns::pattern(
+                            &row.tool,
+                            &serde_json::json!({"command": &row.example}).to_string(),
+                        )
+                    })
+                    .unwrap_or_else(|| crate::patterns::Pattern {
+                        key: String::new(),
+                        label: String::new(),
+                        command: row.example.clone(),
+                        tool: row.tool.clone(),
+                    }),
+            )
         };
+        let ranges = crate::patterns::highlight_ranges(&pattern, &row.key);
         lines.push(Line::styled(
-            "Recorded input · h/l cycles this recording",
+            if ranges.is_empty() {
+                "Recorded input · exact location not mapped"
+            } else {
+                "Recorded input · matched form highlighted"
+            },
             dim,
         ));
-        for line in safe_text(command).lines() {
-            for part in wrap(line, width.saturating_sub(4) as usize, usize::MAX) {
-                lines.push(Line::styled(part, bg));
-            }
-        }
+        let (input_lines, _) =
+            super::inspector::highlighted_lines(command, &ranges, width.saturating_sub(4) as usize);
+        lines.extend(input_lines);
         lines.push(Line::raw(""));
-        let input = serde_json::json!({"command":command}).to_string();
+        let input = if serde_json::from_str::<serde_json::Value>(command)
+            .ok()
+            .is_some_and(|v| v.get("command").is_some() || v.get("cmd").is_some())
+        {
+            command.to_owned()
+        } else {
+            serde_json::json!({"command":command}).to_string()
+        };
         let reference = crate::inspector::reference_notes(tool, &input);
         for line in reference.lines() {
             for part in wrap(line, width.saturating_sub(4) as usize, usize::MAX) {
@@ -249,7 +280,7 @@ fn preview_lines(
     } else {
         lines.push(Line::styled("No patterns in this view.", bg));
         lines.push(Line::styled(
-            "Try Tab for cached sessions, H for Learned,",
+            "Try f for levels, S for scripts, H for Learned,",
             dim,
         ));
         lines.push(Line::styled("or / to change the search.", dim));
