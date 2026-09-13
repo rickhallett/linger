@@ -33,7 +33,6 @@ const install = 'cargo install --git https://github.com/rickhallett/linger --tag
       <button data-view="command" aria-pressed="true">Command</button>
       <button data-view="output" aria-pressed="false">Output</button>
       <button data-view="guide" aria-pressed="false">Field guide</button>
-      <button class="size-control" id="size-control" aria-pressed="false">Enlarge</button>
     </div>
     <div class="terminal-viewport" tabindex="0" aria-label="Captured terminal interface. Use left and right arrows to inspect command parts.">
       <img id="terminal-frame" src="/terminal/command-1.svg" width="1200" height="672" alt="Linger showing the -n flag selected in a sed command, connected to its documentation." fetchpriority="high" />
@@ -45,11 +44,6 @@ const install = 'cargo install --git https://github.com/rickhallett/linger --tag
       <button data-part="2" aria-pressed="false">'8,16p'</button>
       <button data-part="3" aria-pressed="false">src/main.py</button>
     </div>
-    <figcaption>
-      <p id="frame-note" aria-live="polite">The <code>-n</code> flag turns off sed’s automatic printing. The next part, <code>'8,16p'</code>, asks it to print lines 8 to 16.</p>
-      <p class="capture-note">Captured from the development build using a fictional session. These controls switch between real terminal frames. The latest visual refinements are ahead of the 0.1.0 download.</p>
-    </figcaption>
-    <noscript><p>The selected command part is shown above. JavaScript enables the other captured views.</p></noscript>
   </figure>
 
   <section class="project-note prose">
@@ -72,8 +66,8 @@ const install = 'cargo install --git https://github.com/rickhallett/linger --tag
 </main>
 <footer class="shell footer"><p>Built on <a href="https://github.com/furkankly/zoetrope">Zoetrope</a>, by Furkan Kalaycioglu.<br />Linger is independent, open-source software.</p><a href={`${repo}/blob/main/LICENSE`}>MIT licence</a></footer>
 <script>
-  // Background studies are opt-in preview URLs; the plain page remains the default.
-  const background = new URLSearchParams(location.search).get('background');
+  // Phosphor is the selected background; earlier studies remain available by URL.
+  const background = new URLSearchParams(location.search).get('background') ?? 'phosphor';
   const studies: Record<string, number> = {phosphor: 0.12, fold: 0.10, etching: 0.09};
   if (background && Object.hasOwn(studies, background)) {
     const layer = document.querySelector<HTMLElement>('.background-study')!;
@@ -81,7 +75,14 @@ const install = 'cargo install --git https://github.com/rickhallett/linger --tag
     art.alt = '';
     art.addEventListener('load', () => {
       layer.style.setProperty('--art-opacity', String(studies[background]));
-      layer.append(art);
+      if (background === 'phosphor') {
+        const track = document.createElement('div');
+        track.className = 'phosphor-scroll';
+        track.append(art, art.cloneNode());
+        layer.append(track);
+      } else {
+        layer.append(art);
+      }
       requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('visible')));
     });
     art.src = `/backgrounds/${background}.png`;
@@ -89,29 +90,15 @@ const install = 'cargo install --git https://github.com/rickhallett/linger --tag
   let view = 'command';
   let part = 1;
   const image = document.querySelector<HTMLImageElement>('#terminal-frame')!;
-  const viewport = document.querySelector<HTMLElement>('.terminal-viewport')!;
-  const note = document.querySelector<HTMLElement>('#frame-note')!;
   const partControls = document.querySelector<HTMLElement>('#part-controls')!;
   const views = [...document.querySelectorAll<HTMLButtonElement>('[data-view]')];
   const parts = [...document.querySelectorAll<HTMLButtonElement>('[data-part]')];
-  const partNotes = [
-    'sed reads text and applies editing commands. Here it is being used to print a small section of a file.',
-    'The -n flag turns off sed’s automatic printing. The next part, \'8,16p\', asks it to print lines 8 to 16.',
-    '\'8,16p\' selects lines 8 to 16, inclusive, and prints them. The quotes keep the expression together as one shell argument.',
-    'src/main.py is the input file. This invocation prints from the file; it does not edit it in place.'
-  ];
-  const notes: Record<string,string> = {
-    input: 'The original input stays available, including the exact arguments sent to the tool.',
-    output: 'This is the text the call returned. It is recorded evidence from the fictional session.',
-    guide: 'Inspecting the call adds a specimen to the field guide. Opening a recording alone does not add entries.'
-  };
   function render() {
     image.src = `/terminal/${view === 'command' ? `command-${part}` : view}.svg`;
     image.alt = view === 'command' ? `Linger showing ${parts[part].textContent} selected and connected to its explanation.` : `Linger ${view} view of a fictional sed call.`;
     views.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===view)));
     parts.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===part)));
     partControls.hidden = view !== 'command';
-    note.textContent = view === 'command' ? partNotes[part] : notes[view];
   }
   views.forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view!;render();}));
   parts.forEach((b,i)=>b.addEventListener('click',()=>{part=i;render();}));
@@ -121,11 +108,6 @@ const install = 'cargo install --git https://github.com/rickhallett/linger --tag
       e.preventDefault();part=(part+(e.key==='ArrowRight'?1:3))%4;render();
       if((e.target as HTMLElement).hasAttribute('data-part'))parts[part].focus();
     }
-  });
-  document.querySelector<HTMLButtonElement>('#size-control')!.addEventListener('click',e=>{
-    const expanded=viewport.classList.toggle('expanded');
-    const button=e.currentTarget as HTMLButtonElement;
-    button.textContent=expanded?'Fit':'Enlarge';button.setAttribute('aria-pressed',String(expanded));
   });
   document.querySelector('#copy-install')!.addEventListener('click',async()=>{
     const status=document.querySelector<HTMLElement>('#copy-status')!;
