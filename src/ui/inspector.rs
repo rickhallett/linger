@@ -14,7 +14,9 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let [_, content_area] =
         Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]).areas(area);
     if let Some(i) = &mut app.inspector {
-        i.content_width = usize::from(content_area.width).saturating_sub(9).max(1);
+        i.content_width = usize::from(content_area.width)
+            .saturating_sub(if i.tab == Tab::Explain { 7 } else { 9 })
+            .max(1);
     }
     app.refresh_inspector();
     let Some(i) = &app.inspector else { return };
@@ -149,78 +151,64 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .style(bg);
     let mut inner = block.inner(detail_area);
     frame.render_widget(block, detail_area);
-    if i.tab == Tab::Explain && !i.command_lines.is_empty() {
-        let height = (i.command_lines.len() as u16)
+    let mut connected = false;
+    let mut command_hint = String::new();
+    let part_style = i
+        .command
+        .as_ref()
+        .and_then(|c| app.explorer.cache.get(c))
+        .and_then(|e| e.spans.get(i.part))
+        .map(|p| super::theme::syntax(&p.kind, p.known).remove_modifier(Modifier::UNDERLINED))
+        .unwrap_or(accent);
+    if i.tab == Tab::Explain {
+        // Keep a quiet margin around prose; Input and Output retain line numbers.
+        inner.x = inner.x.saturating_add(1);
+        inner.width = inner.width.saturating_sub(2);
+        if inner.height > 3 {
+            inner.y += 1;
+            inner.height -= 1;
+        }
+    }
+    if i.tab == Tab::Explain && !i.command_lines.is_empty() && inner.height >= 6 {
+        let height = i
+            .command_lines
+            .len()
             .min(6)
-            .min(inner.height / 3)
-            .max(1);
-        let [command_area, hint_area, reading_area] = Layout::vertical([
-            Constraint::Length(height),
-            Constraint::Length(2),
+            .min((inner.height as usize / 3).max(1));
+        let first = i
+            .command_row
+            .saturating_sub(height / 2)
+            .min(i.command_lines.len().saturating_sub(height));
+        let (diagram, has_connection) = command_diagram(
+            &i.command_lines[first..first + height],
+            i.command_row.saturating_sub(first),
+            part_style,
+        );
+        connected = has_connection;
+        let [command_area, reading_area] = Layout::vertical([
+            Constraint::Length(diagram.len() as u16),
             Constraint::Fill(1),
         ])
         .areas(inner);
-        let first = i
-            .command_row
-            .saturating_sub(height as usize / 2)
-            .min(i.command_lines.len().saturating_sub(height as usize));
-        frame.render_widget(
-            Paragraph::new(
-                i.command_lines
-                    .iter()
-                    .skip(first)
-                    .take(height as usize)
-                    .cloned()
-                    .collect::<Vec<_>>(),
-            )
-            .style(bg),
-            command_area,
-        );
-        frame.render_widget(
-            Paragraph::new(vec![
-                super::keys::line(
-                    &format!(
-                        "h/l parts · j/k scroll{}{}",
-                        if i.shell_count > 0 {
-                            format!(
-                                " · {{/}} shell {}/{} · literal from JavaScript",
-                                i.shell_index + 1,
-                                i.shell_count
-                            )
-                        } else if i.command_from_argv {
-                            " · shell string from argv".into()
-                        } else {
-                            String::new()
-                        },
-                        if i.command_lines.len() > height as usize {
-                            " · command excerpt"
-                        } else {
-                            ""
-                        }
-                    ),
-                    muted,
-                    &app.key_feedback,
-                ),
-                Line::from(
-                    [
-                        ("command", "command"),
-                        ("flag", "option"),
-                        ("argument", "argument"),
-                        ("syntax", "shell"),
-                        ("unknown", "unknown"),
-                    ]
-                    .into_iter()
-                    .map(|(label, kind)| {
-                        Span::styled(
-                            format!("{label}  "),
-                            super::theme::syntax(kind, kind != "unknown"),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-                ),
-            ])
-            .style(muted),
-            hint_area,
+        frame.render_widget(Paragraph::new(diagram).style(bg), command_area);
+        command_hint = format!(
+            "{}{}",
+            if i.shell_count > 0 {
+                format!(
+                    " {{/}} shell {}/{} · literal from JavaScript",
+                    i.shell_index + 1,
+                    i.shell_count
+                )
+            } else if i.command_from_argv {
+                " shell string from argv".into()
+            } else {
+                String::new()
+            },
+            if i.command_lines.len() > height {
+                " · command excerpt"
+            } else {
+                ""
+            },
         );
         inner = reading_area;
     }
@@ -246,7 +234,18 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 bg
             };
             Line::from(vec![
-                Span::styled(format!("{:>4} │ ", n + 1), muted),
+                if i.tab == Tab::Explain {
+                    Span::styled(
+                        if n == scroll && connected {
+                            "╰─ "
+                        } else {
+                            "   "
+                        },
+                        part_style,
+                    )
+                } else {
+                    Span::styled(format!("{:>4} │ ", n + 1), muted)
+                },
                 Span::styled(line.clone(), style),
             ])
         })
@@ -292,13 +291,70 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     });
     frame.render_widget(
         Paragraph::new(vec![
-            Line::raw(""),
+            super::keys::line(&command_hint, muted, &app.key_feedback),
             super::keys::line(&help, muted, &app.key_feedback),
             super::keys::line(&status, muted, &app.key_feedback),
         ])
         .style(bg),
         footer,
     );
+}
+
+/// Route from the selected display cells into the explanation gutter. The
+/// coordinates come from the same sanitized, wrapped spans as the command.
+fn command_diagram(
+    lines: &[Line<'static>],
+    focus: usize,
+    style: Style,
+) -> (Vec<Line<'static>>, bool) {
+    let range = lines.get(focus).and_then(|line| {
+        let mut column = 3;
+        let mut range = None;
+        for span in &line.spans {
+            let end = column + span.width();
+            if span.style.bg == Some(super::theme::SELECTION) && end > column {
+                range = Some((range.map_or(column, |(start, _)| start), end));
+            }
+            column = end;
+        }
+        range
+    });
+    let mut out = Vec::new();
+    for (row, line) in lines.iter().enumerate() {
+        let mut spans = vec![Span::styled(
+            if range.is_some() && row > focus {
+                "│  "
+            } else {
+                "   "
+            },
+            style,
+        )];
+        spans.extend(line.spans.iter().cloned());
+        out.push(Line::from(spans));
+        if row == focus
+            && let Some((start, end)) = range
+        {
+            let middle = start + (end - start) / 2;
+            let mut bracket = vec![' '; end];
+            bracket[start..end].fill('─');
+            bracket[start] = '└';
+            bracket[end - 1] = '┘';
+            bracket[middle] = if end - start == 1 {
+                '│'
+            } else if middle == end - 1 {
+                '┤'
+            } else {
+                '┬'
+            };
+            out.push(Line::styled(bracket.into_iter().collect::<String>(), style));
+            out.push(Line::styled(
+                format!("╭{}╯", "─".repeat(middle.saturating_sub(1))),
+                style,
+            ));
+        }
+    }
+    out.push(Line::styled(if range.is_some() { "│" } else { "" }, style));
+    (out, range.is_some())
 }
 
 /// Wrap the exact command once per changed selection/width. Highlight its byte
@@ -376,6 +432,45 @@ fn styled_lines(
 #[cfg(test)]
 mod syntax_tests {
     use super::*;
+    #[test]
+    fn connector_tracks_selected_display_cells_after_unicode_and_wrapping() {
+        let command = "echo 界\t-n\nnext";
+        let part = crate::exploration::Part {
+            start: command.find("-n").unwrap(),
+            end: command.find("-n").unwrap() + 2,
+            kind: "option".into(),
+            known: true,
+            text: String::new(),
+            source: String::new(),
+            extractor: String::new(),
+        };
+        for width in [8, 80] {
+            let (lines, focus) =
+                command_lines(command, Some(&part), std::slice::from_ref(&part), width);
+            let (diagram, connected) = command_diagram(&lines, focus, Style::default());
+            assert!(connected);
+            let display: Vec<String> = diagram.iter().map(|line| line.to_string()).collect();
+            // The bracket attaches to the highlighted cells, with Unicode column
+            // widths and the escaped tab already accounted for by the renderer.
+            let prefix: String = lines[focus]
+                .spans
+                .iter()
+                .take_while(|s| s.style.bg != Some(super::super::theme::SELECTION))
+                .map(|s| s.content.as_ref())
+                .collect();
+            let column = 3 + unicode_width::UnicodeWidthStr::width(prefix.as_str());
+            assert_eq!(
+                display[focus + 1].chars().position(|c| c == '└'),
+                Some(column)
+            );
+            assert_eq!(display[focus + 2].chars().last(), Some('╯'));
+            assert!(display.last().unwrap().starts_with('│'));
+            assert!(display.iter().any(|line| line == "│  next"));
+        }
+        let (lines, focus) = command_lines(command, None, &[], 80);
+        assert!(!command_diagram(&lines, focus, Style::default()).1);
+    }
+
     #[test]
     fn syntax_roles_keep_colours_and_selected_range_across_wrapping() {
         let command = "rg -n 界 | cat";

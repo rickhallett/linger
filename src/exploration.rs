@@ -164,30 +164,32 @@ impl Explanation {
             .iter()
             .filter(|p| p.kind.ends_with(" body"))
             .count();
-        let mut coverage = format!(
+        let coverage = format!(
             "Coverage: {documented} reference parts · {bodies} embedded bodies · {} undocumented parts.",
             self.spans
                 .iter()
                 .filter(|p| !p.known && !p.kind.ends_with(" body"))
                 .count()
         );
+        let mut diagnostics = String::new();
         for d in &self.diagnostics {
-            coverage.push_str(&format!("\n{}: {}", d.code, d.message));
+            diagnostics.push_str(&format!("{}: {}\n\n", d.code, d.message));
         }
         if let Some(error) = &self.error {
-            coverage.push_str(&format!("\n{error}"));
+            diagnostics.push_str(&format!("{error}\n\n"));
         }
         format!(
-            "Part {}/{} · {} · {}\n{}\n\n{}\n\nSource: {}{}\n\n{}\n\nLocal matching; no command executed. The manual platform is a reference, not a detected execution host.\nUse 1 for original input; i for Mercury on the whole call.",
+            "Part {}/{} · {} · {}\n\n{}{}\n\n{}\n\n{}\n\nSource: {}{}\n\nLocal matching; no command executed. The manual platform is a reference, not a detected execution host.\nUse 1 for original input; i for Mercury on the whole call.",
             index + 1,
             self.spans.len(),
             p.kind,
             if p.known { "matched" } else { "unknown" },
-            coverage,
+            diagnostics,
             &command[p.start..p.end],
+            p.text,
+            coverage,
             p.source,
-            extraction,
-            p.text
+            extraction
         )
     }
 

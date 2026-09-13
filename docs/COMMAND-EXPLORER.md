@@ -1,6 +1,6 @@
 # Command explorer
 
-Open a tool call and press **3** or **e**. The command remains visible above its documentation, with the selected character span highlighted. **h/l** or **←/→** steps through parts; **j/k**, **PgUp/PgDn** and search navigate the explanation. **Esc** returns to call selection. Input/output panning and time navigation keep their existing keys. **i** still asks Mercury about the whole selected call, not only the highlighted part.
+Open a tool call and press **3** or **e**. The command remains visible above its documentation, with the selected character span highlighted. A bracket and coloured connector lead from that span into the explanation, following display columns across wrapping and Unicode text. Command notes have inner margins and paragraph spacing without line numbers; source labels follow the description. **h/l** or **←/→** steps through parts; **j/k**, **PgUp/PgDn** and search navigate the explanation. **Esc** returns to call selection. Input/output panning and time navigation keep their existing keys. **i** still asks Mercury about the whole selected call, not only the highlighted part.
 
 ## Local setup
 

@@ -62,7 +62,7 @@ Live ingestion continues while the inspector is open. Selection and reading posi
 
 ## Command exploration
 
-The command strip colours matched names green, options yellow, arguments blue and shell syntax purple. Unmatched spans use an underlined warm colour; the selected span keeps its filled highlight. The role legend and documentation heading use the same colours.
+The command strip colours matched names green, options yellow, arguments blue and shell syntax purple. Unmatched spans use an underlined warm colour; the selected span keeps its filled highlight. A bracket under the selected span connects to its explanation with a line in the same role colour. Command notes use inset prose and paragraph spacing; Input and Output keep their line numbers.
 
 Install the optional local documentation pack once, then restart Linger:
 

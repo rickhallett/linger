@@ -6,15 +6,34 @@ import tempfile
 spec = importlib.util.spec_from_file_location('pattern_smoke', Path(__file__).with_name('pattern-smoke.py'))
 module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
 Session = module.Session
+
+def assert_connection(terminal):
+    rows = terminal.screen.display
+    bracket_row = next(y for y, row in enumerate(rows) if '└' in row and ('┤' in row or '┬' in row))
+    bracket_start = rows[bracket_row].index('└')
+    selected = [x for x in range(36,120) if terminal.screen.buffer[bracket_row-1][x].bg == '32473b']
+    assert selected and bracket_start == min(selected), (bracket_start, selected)
+    rail = rows[bracket_row+1].index('╭')
+    heading = next(y for y in range(bracket_row+2,len(rows)) if 'Part ' in rows[y])
+    assert rows[heading][rail:rail+3] == '╰─ '
+    assert all(rows[y][rail] == '│' for y in range(bracket_row+2,heading))
+    assert rows[heading+1][rail+3:118].strip() == ''
+    assert '│' not in rows[heading][rail+3:118]  # no prose line-number gutter
+    return bracket_start
 with tempfile.TemporaryDirectory(prefix='linger-explorer-pty-') as data_dir:
     with Session('examples/repair.jsonl', data_dir) as terminal:
         terminal.key(b'\r3'); terminal.expect('Part 1/3')
         terminal.key(b'l'); terminal.expect('Part 2/3'); terminal.expect('short-format')
+        first_anchor = assert_connection(terminal)
+        terminal.key(b'l'); terminal.expect('Part 3/3')
+        assert assert_connection(terminal) > first_anchor
+        terminal.key(b'h'); terminal.expect('Part 2/3')
         terminal.capture('command-git')
         terminal.key(b'\x1b'); terminal.key(b'k3'); terminal.expect('Part 1/5')
         terminal.key(b'll'); terminal.expect('here-document'); terminal.expect('Quoting the'); terminal.expect('prevents shell parameter')
         terminal.capture('command-heredoc')
         terminal.key(b'l'); terminal.expect('Python body'); terminal.expect('unknown')
+        assert_connection(terminal)
         terminal.key(b'\x1b'); terminal.key(b'kk3'); terminal.expect('Part 1/4')
         terminal.key(b'll'); terminal.expect('regular expression')
         terminal.key(b'l'); terminal.expect('file or directory')
@@ -24,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix='linger-explorer-pty-') as data_dir:
         terminal.key(b'\x1b'); terminal.key(b'j3'); terminal.expect('Part 1/4')
         terminal.key(b'll'); terminal.expect('8 through 16, inclusive')
         terminal.capture('command-sed-range')
-print(json.dumps({'terminal':'120x40 PTY', 'checks':['Git flag selection','quoted heredoc','opaque Python body','rg pattern/path distinction','return to output','part selection retained across tabs','numeric sed range'], 'provider_requests':0}))
+print(json.dumps({'terminal':'120x40 PTY', 'checks':['Git flag selection','span-to-explanation connector','connector follows selection','spaced prose without line numbers','quoted heredoc','opaque Python body','rg pattern/path distinction','return to output','part selection retained across tabs','numeric sed range'], 'provider_requests':0}))
 def highlighted(terminal):
     # Ignore the selected frequency row: only inspect the recorded-example pane.
     return ''.join(terminal.screen.buffer[y][x].data for y in range(3, 32) for x in range(56, 119) if terminal.screen.buffer[y][x].bg == '32473b')
