@@ -8,7 +8,7 @@ The agent ran it. Now make sense of it.
 
 [![Runtime checks](https://github.com/rickhallett/linger/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/rickhallett/linger/actions/workflows/ci.yml)
 [![Website](https://github.com/rickhallett/linger/actions/workflows/website.yml/badge.svg?branch=main&event=push)](https://github.com/rickhallett/linger/actions/workflows/website.yml)
-[![crates.io](https://img.shields.io/crates/v/linger?color=2dd5a0)](https://crates.io/crates/linger)
+[![Rust 1.88+](https://img.shields.io/badge/Rust-1.88%2B-2dd5a0?logo=rust)](https://www.rust-lang.org/tools/install)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2dd5a0)](LICENSE)
 
 Linger is an open-source terminal viewer for Claude Code and Codex sessions. Follow a run live, move back through time, and drill into the exact inputs and recorded outputs of individual tool calls. Explore command parts against local documentation or ask Mercury to interpret the selected evidence.
