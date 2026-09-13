@@ -1,10 +1,10 @@
 # Linger website
 
-This branch contains a **project-page exploration**, requested on 13 September 2026: plain prose, restrained typography and captured terminal interactions. It is a preview awaiting selection. Production remains the Osaka Jade design on main.
+The canonical website is the **project page with scrolling Phosphor**, selected for production on 13 September 2026: plain prose, restrained typography and captured terminal interactions against a subtle jade background.
 
 ## Active source
 
-- `linger/pages/index.astro`: exploration homepage.
+- `linger/pages/index.astro`: canonical homepage.
 - `linger/pages/guide.astro`: setup, controls and current limits.
 - `linger/styles/site.css`: shared project-page and guide styles.
 - `linger/public/favicon.svg`: site icon.
@@ -12,7 +12,7 @@ This branch contains a **project-page exploration**, requested on 13 September 2
 
 `pnpm dev` starts the local site; `pnpm build` generates `dist/`. Only `/` and `/guide/` are published by this build. Production is https://lingerer.xyz on Vercel project `linger-website`. See [the release process](../docs/RELEASING.md) for PR previews and automatic production deployment from main.
 
-The demo switches between SVG captures of the actual terminal cell buffer in `linger/public/terminal/`. They were captured on 13 September 2026 from the active development build using `../examples/repair.jsonl`, at 120 columns by 32 rows, with isolated temporary data and model keys removed. The selected command and its documentation connector come from the app itself. The page captions are authored explanations. The development UI is ahead of the tagged 0.1.0 download, which the page identifies. Refresh captures through the terminal when the UI changes; do not redraw fictional app behavior. Website interactions do not run terminal commands or make model requests. Check product claims against the current repository documentation when changing copy.
+The demo switches between SVG captures of the actual terminal cell buffer in `linger/public/terminal/`. They were captured on 13 September 2026 from the active development build using `../examples/repair.jsonl`, at 120 columns by 32 rows, with isolated temporary data and model keys removed. The selected command and its documentation connector come from the app itself. The development UI is ahead of the tagged 0.1.0 download. Keep this capture provenance in these developer notes; the operator selected a homepage without demo disclaimers. Refresh captures through the terminal when the UI changes; do not redraw fictional app behavior. Website interactions do not run terminal commands or make model requests. Check product claims against the current repository documentation when changing copy.
 
 The palette follows `../docs/VISUAL-DESIGN.md`. Preserve readable input/output, keyboard controls, and the distinction between recorded evidence and interpretation. No eyebrow elements.
 
@@ -28,4 +28,4 @@ The inherited Zoetrope `src/`, `public/`, `wasm/` and `astro.config.mjs` remain 
 
 ## Background studies
 
-Opt-in preview query parameters `?background=phosphor`, `?background=fold` and `?background=etching` show image-generated art from `linger/public/backgrounds/`. Phosphor is selected as the default background at 12% opacity, with a seamless 55-second upward scroll and a 1.8-second initial fade. Reduced-motion preference removes both animation and transition. Fold (10%) and etching (9%) remain available by query for comparison. Original PNGs and full built-in image-generation prompts are retained locally in the root checkout at `outputs/background-studies-2026-09-13/`.
+Retained background study query parameters `?background=phosphor`, `?background=fold` and `?background=etching` show image-generated art from `linger/public/backgrounds/`. Phosphor is selected as the default background at 12% opacity, with a seamless 55-second upward scroll and a 1.8-second initial fade. Reduced-motion preference removes both animation and transition. Fold (10%) and etching (9%) remain available by query for comparison. Original PNGs and full built-in image-generation prompts are retained locally in the root checkout at `outputs/background-studies-2026-09-13/`.
