@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 mod highlight;
 mod normalize;
+mod parts;
 pub use highlight::ranges as highlight_ranges;
 mod structure;
 pub(crate) use structure::wrapper as shell_wrapper;
@@ -331,18 +332,28 @@ impl Library {
         if view.stamp.as_ref() == Some(&stamp) {
             return;
         }
+        let reset_selection = view.level == Level::Parts
+            && view
+                .stamp
+                .as_ref()
+                .is_some_and(|stamp| stamp.5 != view.query);
         let query = view.query.to_lowercase();
         let mut rows: Vec<_> = self
             .all_rows()
             .into_iter()
             .filter(|a| {
-                a.level == view.level
+                (a.level == view.level
+                    || (view.level == Level::Parts && a.level == Level::Programs))
                     && (!a.inline || view.show_scripts || !query.is_empty())
                     && (view.all || a.here > 0)
                     && (view.show_learned || self.learning(&a.key) != Learning::Learned)
-                    && format!("{} {}", a.label, a.example)
-                        .to_lowercase()
-                        .contains(&query)
+                    && if view.level == Level::Parts {
+                        a.label.to_lowercase().contains(&query)
+                    } else {
+                        format!("{} {}", a.label, a.example)
+                            .to_lowercase()
+                            .contains(&query)
+                    }
             })
             .collect();
         rows.sort_by(|a, b| {
@@ -357,9 +368,13 @@ impl Library {
             .iter()
             .position(|r| Some(&r.key) == view.selected.as_ref())
             .unwrap_or(0);
-        if !rows.iter().any(|r| Some(&r.key) == view.selected.as_ref()) {
+        if reset_selection || !rows.iter().any(|r| Some(&r.key) == view.selected.as_ref()) {
             view.selected = rows
-                .get(old_index.min(rows.len().saturating_sub(1)))
+                .get(if reset_selection {
+                    0
+                } else {
+                    old_index.min(rows.len().saturating_sub(1))
+                })
                 .map(|r| r.key.clone());
             view.scroll = 0;
             view.example = 0;
@@ -412,7 +427,10 @@ impl App {
     }
     pub fn open_library(&mut self) {
         if self.library.view.is_none() {
-            self.library.view = Some(View::default());
+            self.library.view = Some(View {
+                level: Level::Parts,
+                ..Default::default()
+            });
         }
         self.library.refresh_view();
     }

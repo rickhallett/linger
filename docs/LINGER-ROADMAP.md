@@ -34,8 +34,8 @@ The first index accumulates opened sessions, supports bounded usage forms and ex
 
 ## Richer explanation and replay
 
-- Implemented: local documentation-span selection through the optional explainshell backend, with source/extractor labels, unknown coverage and stable selection. Manual platform/version matching to the actual execution host remains open.
-- Implemented: inline-script filtering, searchable retained scripts and structural frequency levels for programs, wrappers and combinations. General token combinations and richer relationships remain open.
+- Implemented: local documentation-span selection through the optional explainshell backend, with source/extractor labels, unknown coverage, syntax-role colours and stable selection. Manual platform/version matching to the actual execution host remains open.
+- Implemented: inline-script filtering, searchable retained scripts and structural frequency levels for programs, wrappers and combinations. The default Parts view now adds subcommands, options, encountered option groups and composition operators with source highlights. Unbounded token-subset mining remains open.
 - Selected output ranges and interpretation follow-ups.
 - Episode selection, loops, pacing around Practising patterns and cross-session comparisons.
 - Editable workflow-stage annotations with their underlying calls visible.

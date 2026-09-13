@@ -62,6 +62,8 @@ Live ingestion continues while the inspector is open. Selection and reading posi
 
 ## Command exploration
 
+The command strip colours matched names green, options yellow, arguments blue and shell syntax purple. Unmatched spans use an underlined warm colour; the selected span keeps its filled highlight. The role legend and documentation heading use the same colours.
+
 Install the optional local documentation pack once, then restart Linger:
 
 ```sh
@@ -74,12 +76,13 @@ The pack uses Ubuntu 26.04 manuals, which may differ from the execution host. Th
 
 ## Pattern library
 
-Press **b** from the graph or inspector. The library ranks recurring command forms by frequency and previews their original inputs with reference notes. The selected form is highlighted where it appears in the recorded input, including wrapper elements and commands inside quoted argument strings.
+Press **b** from the graph or inspector. The library opens on **Parts**, ranking recurring programs, subcommands, flags, flag groups and composition operators across different full commands. It previews the constituent tokens in their original recorded context. The selected form is highlighted where it appears in the recorded input, including wrapper elements and commands inside quoted argument strings.
 
 | Key in library | Action |
 |---|---|
 | Tab | This recording / all cached sessions |
-| f | Combinations / programs / shell wrappers |
+| f | Cycle Parts → Combinations → Programs → Wrappers |
+| c | Return directly to Parts |
 | S | Include/hide inline scripts (hidden by default) |
 | j/k or ↑/↓ | Select a pattern |
 | h/l or ←/→ | Preview another occurrence in this recording |
@@ -96,6 +99,8 @@ Inline code bodies are hidden from the default combination ranking. **S** includ
 **f** changes structural level. For `["/bin/zsh", "-lc", "rg -n needle src"]`, Programs counts `/bin/zsh` and `rg`; Wrappers counts `/bin/zsh -lc`; Combinations includes the wrapper with the command form and the inner `rg` form. Supported pipelines also expose their constituent command forms. A row counts **calls containing that form**, at most once per call. Rows overlap and must not be summed as unique calls. This is a bounded structural index, not every possible token subset.
 
 Timeline keys **[/]**, **g/End**, **,/.** and **Space** work while Patterns is open. **?** shows its controls; Esc closes help before closing Patterns. While typing a search, those characters remain search text.
+
+For example, two calls using `rg -n --hidden -g` with different globs and paths contribute to `rg`, `rg -n`, `rg --hidden`, `rg -g` and their flag group. `git diff --stat` contributes `git`, `git diff` and `git diff --stat`; pipelines contribute `shell |` and their individual command parts. Parts searches constituent names; other levels also search recorded examples. Known option values and arguments after `--` are excluded from flag counts. These are bounded syntactic groupings; unknown flag arity and arbitrary shell grammar remain outside the matcher.
 
 Each row distinguishes **here**, **all cached occurrences**, and **distinct sessions**. Counts cover entire opened recordings, independent of the playhead. Replaying or reopening a call does not increment its count. The cache grows as you open sessions; Linger does not scan your unseen history. Cached-only patterns have a recorded input example; open the original recording to inspect its output.
 
@@ -158,6 +163,7 @@ uv run --with pyte python scripts/terminal-smoke.py
 uv run --with pyte python scripts/pattern-smoke.py
 uv run --with pyte python scripts/guide-smoke.py
 uv run --with pyte python scripts/wrap-smoke.py
+uv run --with pyte python scripts/parts-smoke.py
 # With the optional local manpage pack installed:
 python3 scripts/explainshell-check.py
 uv run --with pyte python scripts/exploration-smoke.py

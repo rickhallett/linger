@@ -8,6 +8,7 @@ pub enum Level {
     Combinations,
     Programs,
     Wrappers,
+    Parts,
 }
 impl Level {
     pub fn label(self) -> &'static str {
@@ -15,13 +16,15 @@ impl Level {
             Self::Combinations => "Combinations",
             Self::Programs => "Programs",
             Self::Wrappers => "Wrappers",
+            Self::Parts => "Parts",
         }
     }
     pub fn next(self) -> Self {
         match self {
             Self::Combinations => Self::Programs,
             Self::Programs => Self::Wrappers,
-            Self::Wrappers => Self::Combinations,
+            Self::Wrappers => Self::Parts,
+            Self::Parts => Self::Combinations,
         }
     }
 }
@@ -70,7 +73,7 @@ pub(crate) fn wrapper(words: &[String]) -> Option<(String, &str)> {
     }
     Some((words[..words.len() - 1].join(" "), words.last()?.as_str()))
 }
-fn inline(words: &[String], command: &str) -> bool {
+pub(super) fn is_inline(words: &[String], command: &str) -> bool {
     let Some(program) = words.first() else {
         return false;
     };
@@ -132,9 +135,16 @@ fn analyze_command(command: &str, out: &mut Vec<Projection>, depth: usize) {
     if depth > 4 || command.len() > 32 * 1024 {
         return;
     }
-    if let Some(segments) = normalize::segments(command) {
+    if let Some(segments) = super::parts::segments(command) {
         let segment_depth = depth + usize::from(segments.len() > 1);
-        for (segment, _) in segments {
+        for (segment, separator) in segments {
+            if !separator.is_empty() {
+                out.push(projected(
+                    format!("shell {}", separator.trim()),
+                    Level::Parts,
+                    false,
+                ));
+            }
             if let Ok(words) = shell_words::split(segment) {
                 analyze_words(&words, segment, out, segment_depth);
             }
@@ -144,7 +154,7 @@ fn analyze_command(command: &str, out: &mut Vec<Projection>, depth: usize) {
         // interpreter, never mine words from a heredoc/program body.
         if let Some(first) = words.first().filter(|w| executable(w)) {
             out.push(projected(first.clone(), Level::Programs, false));
-            if inline(&words, command) {
+            if is_inline(&words, command) {
                 out[0].inline = true;
             }
         }
@@ -155,8 +165,18 @@ fn analyze_words(words: &[String], command: &str, out: &mut Vec<Projection>, dep
         return;
     };
     out.push(projected(program.clone(), Level::Programs, false));
+    for component in super::parts::components(words) {
+        out.push(projected(component.label, Level::Parts, false));
+    }
     if let Some((label, body)) = wrapper(words) {
         out.push(projected(label.clone(), Level::Wrappers, false));
+        // Opaque JSON wrapper inputs belong in Wrappers, not the combination ranking.
+        if depth == 0
+            && !shell_words::split(body.lines().next().unwrap_or(body))
+                .is_ok_and(|w| is_inline(&w, body))
+        {
+            out[0] = projected(label.clone(), Level::Wrappers, false);
+        }
         // Preserve both the full wrapper+command form and inner command forms.
         if let Some(inner) =
             normalize::pattern("Bash", &serde_json::json!({"command": body}).to_string())
@@ -177,7 +197,7 @@ fn analyze_words(words: &[String], command: &str, out: &mut Vec<Projection>, dep
             }
         }
         analyze_command(body, out, depth + 1);
-    } else if inline(words, command) {
+    } else if is_inline(words, command) {
         out[0].inline = true;
     } else if let Some(shape) = normalize::usage(&shell_words::join(words)) {
         let p = normalize::pattern(
@@ -191,5 +211,17 @@ fn analyze_words(words: &[String], command: &str, out: &mut Vec<Projection>, dep
             level: Level::Combinations,
             inline: false,
         });
+    } else if depth > 0 {
+        let command = shell_words::join(words);
+        if let Some(p) =
+            normalize::pattern("Bash", &serde_json::json!({"command": command}).to_string())
+        {
+            out.push(Projection {
+                key: p.key,
+                label: p.label,
+                level: Level::Combinations,
+                inline: false,
+            });
+        }
     }
 }

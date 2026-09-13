@@ -46,7 +46,7 @@ class Session:
 if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='linger-pattern-pty-') as data_dir:
         with Session('examples/repair.jsonl',data_dir) as terminal:
-            terminal.key(b'b/rg -n\r');terminal.expect('rg -n <pattern> <path>')
+            terminal.key(b'bf/rg -n\r');terminal.expect('rg -n <pattern> <path>')
             terminal.key(b'[');terminal.expect('11:00:00');terminal.expect('rg -n <pattern> <path>')
             terminal.key(b'g');terminal.expect('11:00:28');terminal.expect('rg -n <pattern> <path>')
             terminal.key(b'?');terminal.expect('g/End latest');terminal.expect('scope')
@@ -56,17 +56,17 @@ if __name__ == '__main__':
             terminal.key(b'\r');terminal.expect('TODO handle empty input');terminal.expect('◎')
             terminal.capture('practising-inspector')
         with Session('examples/patterns.jsonl',data_dir) as terminal:
-            terminal.key(b'b/rg -n\r');terminal.expect('Practising')
+            terminal.key(b'bf/rg -n\r');terminal.expect('Practising')
             terminal.expect('3 here');terminal.expect('4 all');terminal.expect('2 sessions')
             terminal.key(b'\t');terminal.expect('All cached sessions');terminal.capture('patterns-library')
             terminal.key(b'l');terminal.expect('Occurrence 2/3');terminal.expect('rg -n empty tests')
             terminal.key(b'L');terminal.expect('No patterns in this view.');terminal.expect('Learning state saved')
         with Session('examples/repair.jsonl',data_dir) as terminal:
-            terminal.key(b'b/rg -n\r');terminal.expect('No patterns in this view.')
+            terminal.key(b'bf/rg -n\r');terminal.expect('No patterns in this view.')
             terminal.key(b'H');terminal.expect('Learned');terminal.expect('4 all');terminal.expect('1 here')
             terminal.key(b'p');terminal.expect('Practising');terminal.expect('Learning state saved')
             terminal.key(b'\r');terminal.expect('TODO handle empty input');terminal.expect('◎')
-            terminal.key(b'b');terminal.expect('4 all');terminal.capture('patterns-reopened')
+            terminal.key(b'bf');terminal.expect('4 all');terminal.capture('patterns-reopened')
         conn=sqlite3.connect(str(Path(data_dir)/'patterns.sqlite3'))
         assert conn.execute('SELECT COUNT(*) FROM occurrences').fetchone()[0]==9
         assert conn.execute('SELECT COUNT(DISTINCT session) FROM occurrences').fetchone()[0]==2

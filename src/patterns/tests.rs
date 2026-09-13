@@ -333,7 +333,7 @@ mod persistence {
         drop(store);
         let store = Store::open(&dir.0).unwrap();
         let stats = store.aggregates().unwrap();
-        assert_eq!(stats.len(), 2); // usage combination and program projection
+        assert_eq!(stats.len(), 3); // usage, program and constituent flag
         for row in &stats {
             assert_eq!(row.sessions.values().sum::<usize>(), 3);
             assert_eq!(row.sessions.len(), 2);
@@ -570,4 +570,105 @@ fn collection_survives_restart_and_cache_rebuild_without_importing_occurrences()
         assert_eq!(store.collection().unwrap(), vec![o]);
     }
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn constituent_parts_survive_wrappers_pipelines_and_changing_operands() {
+    let mut library = Library::default();
+    library.observe(
+        "one",
+        argv_facts(
+            "a",
+            &[
+                "/bin/zsh",
+                "-lc",
+                "rg -n --hidden -g '*.rs' alpha src | sort -u && git diff --stat > report.txt 2>&1",
+            ],
+            0,
+        )
+        .iter(),
+    );
+    library.observe(
+        "one",
+        facts("b", "rg -n --hidden -g '*.py' beta tests", 1).iter(),
+    );
+    library.view = Some(View {
+        level: Level::Parts,
+        ..Default::default()
+    });
+    library.refresh_view();
+    for (label, count) in [
+        ("rg -n", 2),
+        ("rg --hidden", 2),
+        ("rg -g", 2),
+        ("git diff", 1),
+        ("git diff --stat", 1),
+        ("shell |", 1),
+        ("shell &&", 1),
+        ("sort -u", 1),
+    ] {
+        let row = library
+            .view
+            .as_ref()
+            .unwrap()
+            .rows
+            .iter()
+            .find(|r| r.label == label)
+            .unwrap_or_else(|| panic!("Missing {label}"));
+        assert_eq!(row.here, count, "{label}");
+        let p = &library.examples(&row.key)[0].pattern;
+        assert!(
+            !highlight_ranges(p, &row.key).is_empty(),
+            "Unmapped {label}"
+        );
+    }
+    library.view.as_mut().unwrap().query = "rg -n".into();
+    library.refresh_view();
+    assert!(
+        library
+            .view
+            .as_ref()
+            .unwrap()
+            .rows
+            .iter()
+            .all(|r| r.label.contains("rg -n"))
+    );
+    assert_eq!(library.selected().unwrap().label, "rg -n");
+    let p = pattern(
+        "Bash",
+        r#"{"command":"rg -e '-n' --hidden -- --ignore-case"}"#,
+    )
+    .unwrap();
+    let labels: Vec<_> = projections(&p)
+        .into_iter()
+        .filter(|p| p.level == Level::Parts)
+        .map(|p| p.label)
+        .collect();
+    assert!(labels.contains(&"rg -e".to_string()));
+    assert!(!labels.contains(&"rg -n".to_string()));
+    assert!(!labels.contains(&"rg --ignore-case".to_string()));
+    let p = pattern(
+        "Bash",
+        r#"{"command":"python3 -c 'rg -n TODO src | git diff --stat'"}"#,
+    )
+    .unwrap();
+    assert!(
+        !projections(&p)
+            .iter()
+            .any(|p| p.label == "git diff" || p.label == "rg -n")
+    );
+}
+
+#[test]
+fn parts_skip_comments_and_do_not_execute_or_mine_substitutions() {
+    let p = pattern("Bash", r##"{"command":"# investigate\nrg --hidden TODO src 2>&1 # comment --not-an-option\ngit diff --stat"}"##).unwrap();
+    let labels = projections(&p)
+        .into_iter()
+        .map(|p| p.label)
+        .collect::<Vec<_>>();
+    assert!(labels.contains(&"rg --hidden".into()));
+    assert!(labels.contains(&"git diff --stat".into()));
+    assert!(!labels.iter().any(|p| p == "rg --not-an-option"));
+    let p = pattern("Bash", r#"{"command":"echo $(rg --hidden secret)"}"#).unwrap();
+    assert!(!projections(&p).iter().any(|p| p.label == "rg --hidden"));
 }

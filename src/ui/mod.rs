@@ -699,7 +699,7 @@ fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette, patte
     if patterns {
         lines = [
             ("patterns", "j/k select · h/l occurrences · Enter inspect"),
-            ("scope", "Tab recording/all · f grouping level"),
+            ("scope", "Tab recording/all · f level · c parts"),
             ("filter", "S scripts · H Learned · / search"),
             ("learning", "w Want · p Practising · L Learned · u clear"),
             ("cache", "r refresh command counts"),

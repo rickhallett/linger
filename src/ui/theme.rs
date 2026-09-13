@@ -33,3 +33,24 @@ pub fn selected() -> Style {
         .fg(BRIGHT_TEXT)
         .add_modifier(Modifier::BOLD)
 }
+
+/// Syntax roles from the local matcher; unknown coverage has its own style.
+pub fn syntax(kind: &str, known: bool) -> Style {
+    let color = if !known {
+        Color::Rgb(207, 128, 105)
+    } else if kind.contains("option") {
+        Color::Rgb(229, 199, 54)
+    } else if kind.contains("argument") || kind.contains("operand") {
+        Color::Rgb(131, 172, 198)
+    } else if kind.contains("command") || matches!(kind, "name" | "synopsis") {
+        Color::Rgb(99, 176, 122)
+    } else {
+        Color::Rgb(178, 150, 193)
+    };
+    let style = Style::default().fg(color);
+    if known {
+        style
+    } else {
+        style.add_modifier(Modifier::UNDERLINED)
+    }
+}

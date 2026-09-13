@@ -31,7 +31,7 @@ def highlighted(terminal):
 
 with tempfile.TemporaryDirectory(prefix='linger-structure-pty-') as data_dir:
     with Session('examples/structure.jsonl', data_dir) as terminal:
-        terminal.key(b'b'); terminal.expect('Combinations'); terminal.expect('scripts hidden')
+        terminal.key(b'bf'); terminal.expect('Combinations'); terminal.expect('scripts hidden')
         assert 'unique-script' not in terminal.text()
         terminal.key(b'/rg -n\r'); terminal.expect('2 here')
         terminal.key(b'/\r'); terminal.key(b'f'); terminal.expect('Programs'); terminal.expect('/bin/zsh'); terminal.expect('3 here')
@@ -43,14 +43,14 @@ with tempfile.TemporaryDirectory(prefix='linger-structure-pty-') as data_dir:
         terminal.key(b'p'); terminal.expect('Learning state saved')
         terminal.key(b'\r'); terminal.expect('◎'); terminal.key(b'3'); terminal.expect('shell string from argv'); terminal.expect('Part 1/4')
         terminal.capture('command-from-argv')
-        terminal.key(b'b'); terminal.expect('Combinations')
+        terminal.key(b'bf'); terminal.expect('Combinations')
         terminal.key(b'/unique-script\r'); terminal.expect('unique-script'); terminal.expect('1 here')
         terminal.capture('frequency-script-search')
     with Session('examples/structure.jsonl', data_dir) as terminal:
-        terminal.key(b'bff'); terminal.expect('Wrappers'); terminal.expect('Practising'); terminal.expect('3 all')
+        terminal.key(b'bfff'); terminal.expect('Wrappers'); terminal.expect('Practising'); terminal.expect('3 all')
         terminal.key(b'\t'); terminal.expect('All cached sessions'); terminal.expect('3 all')
     with Session('examples/repair.jsonl', data_dir) as terminal:
-        terminal.key(b'bff\t'); terminal.expect('Wrappers'); terminal.expect('0 here'); terminal.expect('3 all')
+        terminal.key(b'bfff\t'); terminal.expect('Wrappers'); terminal.expect('0 here'); terminal.expect('3 all')
         terminal.expect('Cached example')
         assert highlighted(terminal) == '"/bin/zsh""-lc"', highlighted(terminal)
         terminal.capture('frequency-cached-highlight')

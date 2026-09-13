@@ -214,6 +214,13 @@ fn walk_words(words: &[Word], out: &mut BTreeMap<String, Ranges>, depth: usize) 
     let Some(first) = words.first() else { return };
     add(out, key(&first.value.text, Level::Programs), [first.range]);
     let decoded: Vec<_> = words.iter().map(|w| w.value.text.clone()).collect();
+    for component in super::parts::components(&decoded) {
+        add(
+            out,
+            key(&component.label, Level::Parts),
+            component.words.iter().map(|&i| words[i].range),
+        );
+    }
     if let Some((label, body)) = structure::wrapper(&decoded) {
         add(
             out,
@@ -234,8 +241,7 @@ fn walk_words(words: &[Word], out: &mut BTreeMap<String, Ranges>, depth: usize) 
     } else if let Some(pattern) = normalize::pattern(
         "Bash",
         &serde_json::json!({"command": shell_words::join(&decoded)}).to_string(),
-    ) && !pattern.label.starts_with("exact command")
-    {
+    ) {
         add(out, pattern.key, words.iter().map(|w| w.range));
     }
 }
@@ -243,9 +249,29 @@ fn walk(input: &Mapped, out: &mut BTreeMap<String, Ranges>, depth: usize) {
     if depth > 4 || input.text.len() > 32 * 1024 {
         return;
     }
-    if let Some(segments) = normalize::segments(&input.text) {
-        for (segment, _) in segments {
+    if let Some(segments) = super::parts::segments(&input.text) {
+        for (segment, separator) in segments {
             let start = segment.as_ptr() as usize - input.text.as_ptr() as usize;
+            if !separator.is_empty() {
+                let tail = &input.text[start + segment.len()..];
+                let offset = tail.len()
+                    - tail
+                        .trim_start_matches(|c: char| c.is_whitespace() && c != '\n')
+                        .len();
+                let begin = start + segment.len() + offset;
+                let size = if input.text[begin..].starts_with('\n') {
+                    1
+                } else {
+                    separator.trim().len()
+                };
+                if let Some(range) = input.range(begin, begin + size) {
+                    add(
+                        out,
+                        key(&format!("shell {}", separator.trim()), Level::Parts),
+                        [range],
+                    );
+                }
+            }
             if let Some(words) = shell_words(&input.slice(start, start + segment.len())) {
                 walk_words(&words, out, depth);
             }

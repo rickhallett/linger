@@ -230,7 +230,16 @@ impl App {
                     .cache
                     .get(command)
                     .and_then(|e| e.spans.get(i.part));
-                crate::ui::inspector::command_lines(command, part, i.content_width.max(1))
+                crate::ui::inspector::command_lines(
+                    command,
+                    part,
+                    self.explorer
+                        .cache
+                        .get(command)
+                        .map(|e| e.spans.as_slice())
+                        .unwrap_or_default(),
+                    i.content_width.max(1),
+                )
             })
             .unwrap_or_default();
         i.lines = safe_text(&content)

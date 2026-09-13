@@ -167,19 +167,38 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
             command_area,
         );
         frame.render_widget(
-            Paragraph::new(format!(
-                "h/l ←/→ parts · j/k scroll{}{}",
-                if i.command_from_argv {
-                    " · shell string from argv"
-                } else {
-                    ""
-                },
-                if i.command_lines.len() > height as usize {
-                    " · command excerpt"
-                } else {
-                    ""
-                }
-            ))
+            Paragraph::new(vec![
+                Line::from(format!(
+                    "h/l ←/→ parts · j/k scroll{}{}",
+                    if i.command_from_argv {
+                        " · shell string from argv"
+                    } else {
+                        ""
+                    },
+                    if i.command_lines.len() > height as usize {
+                        " · command excerpt"
+                    } else {
+                        ""
+                    }
+                )),
+                Line::from(
+                    [
+                        ("command", "command"),
+                        ("flag", "option"),
+                        ("argument", "argument"),
+                        ("syntax", "shell"),
+                        ("unknown", "unknown"),
+                    ]
+                    .into_iter()
+                    .map(|(label, kind)| {
+                        Span::styled(
+                            format!("{label}  "),
+                            super::theme::syntax(kind, kind != "unknown"),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                ),
+            ])
             .style(muted),
             hint_area,
         );
@@ -194,7 +213,14 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .skip(scroll)
         .take(inner.height as usize)
         .map(|(n, line)| {
-            let style = if !query.is_empty() && line.to_lowercase().contains(&query) {
+            let style = if n == 0 && i.tab == Tab::Explain {
+                i.command
+                    .as_ref()
+                    .and_then(|c| app.explorer.cache.get(c))
+                    .and_then(|e| e.spans.get(i.part))
+                    .map(|p| super::theme::syntax(&p.kind, p.known).add_modifier(Modifier::BOLD))
+                    .unwrap_or(bg)
+            } else if !query.is_empty() && line.to_lowercase().contains(&query) {
                 accent.add_modifier(Modifier::BOLD)
             } else {
                 bg
@@ -260,11 +286,13 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
 pub(crate) fn command_lines(
     command: &str,
     part: Option<&crate::exploration::Part>,
+    parts: &[crate::exploration::Part],
     width: usize,
 ) -> (Vec<Line<'static>>, usize) {
-    highlighted_lines(
+    styled_lines(
         command,
         &part.map(|p| vec![(p.start, p.end)]).unwrap_or_default(),
+        parts,
         width,
     )
 }
@@ -272,6 +300,14 @@ pub(crate) fn command_lines(
 pub(crate) fn highlighted_lines(
     command: &str,
     ranges: &[(usize, usize)],
+    width: usize,
+) -> (Vec<Line<'static>>, usize) {
+    styled_lines(command, ranges, &[], width)
+}
+fn styled_lines(
+    command: &str,
+    ranges: &[(usize, usize)],
+    parts: &[crate::exploration::Part],
     width: usize,
 ) -> (Vec<Line<'static>>, usize) {
     use unicode_width::UnicodeWidthChar;
@@ -290,6 +326,12 @@ pub(crate) fn highlighted_lines(
             columns = 0;
             continue;
         }
+        let syntax = parts
+            .iter()
+            .filter(|p| p.start <= offset && offset < p.end)
+            .min_by_key(|p| p.end - p.start)
+            .map(|p| super::theme::syntax(&p.kind, p.known))
+            .unwrap_or(normal);
         for display in safe_text(&c.to_string()).chars() {
             let size = display.width().unwrap_or(0);
             if columns > 0 && columns + size > width {
@@ -301,11 +343,62 @@ pub(crate) fn highlighted_lines(
             }
             spans.push(Span::styled(
                 display.to_string(),
-                if active { selected } else { normal },
+                if active { selected } else { syntax },
             ));
             columns += size;
         }
     }
     lines.push(Line::from(spans));
     (lines, focus.unwrap_or(0))
+}
+
+#[cfg(test)]
+mod syntax_tests {
+    use super::*;
+    #[test]
+    fn syntax_roles_keep_colours_and_selected_range_across_wrapping() {
+        let command = "rg -n 界 | cat";
+        let parts = vec![
+            (0, 2, "synopsis", true),
+            (3, 5, "option", true),
+            (6, 9, "argument", true),
+            (10, 11, "shell", true),
+            (12, 15, "unknown", false),
+        ]
+        .into_iter()
+        .map(|(start, end, kind, known)| crate::exploration::Part {
+            start,
+            end,
+            kind: kind.into(),
+            known,
+            text: String::new(),
+            source: String::new(),
+            extractor: String::new(),
+        })
+        .collect::<Vec<_>>();
+        let (lines, _) = command_lines(command, Some(&parts[1]), &parts, 8);
+        let spans = lines.iter().flat_map(|l| &l.spans).collect::<Vec<_>>();
+        assert_eq!(
+            spans.iter().map(|s| s.content.as_ref()).collect::<String>(),
+            command
+        );
+        assert!(
+            spans.iter().any(|s| s.content == "界"
+                && s.style.fg == super::super::theme::syntax("argument", true).fg)
+        );
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "-" && s.style.bg == Some(super::super::theme::SELECTION))
+        );
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "c" && s.style.add_modifier.contains(Modifier::UNDERLINED))
+        );
+        assert_ne!(
+            super::super::theme::syntax("command", true).fg,
+            super::super::theme::syntax("option", true).fg
+        );
+    }
 }

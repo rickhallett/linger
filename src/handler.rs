@@ -458,6 +458,7 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
 
 fn library_key(key: &KeyEvent, app: &mut App) -> bool {
     use crate::patterns::Learning;
+    app.library.refresh_view();
     let view = app.library.view.as_mut().unwrap();
     if view.searching {
         match key.code {
@@ -484,6 +485,12 @@ fn library_key(key: &KeyEvent, app: &mut App) -> bool {
         KeyCode::Char('q') => return true,
         KeyCode::Tab => {
             view.all = !view.all;
+            view.scroll = 0;
+            view.example = 0;
+        }
+        KeyCode::Char('c') => {
+            view.level = crate::patterns::Level::Parts;
+            view.query.clear();
             view.scroll = 0;
             view.example = 0;
         }

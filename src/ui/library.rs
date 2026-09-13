@@ -64,7 +64,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 ),
             ]),
             Line::styled(
-                " G guide · Tab scope · f level · S scripts · j/k select · h/l occurrence · Enter inspect · ? help · b/Esc return",
+                " G guide · Tab scope · f level · c parts · S scripts · j/k select · h/l occurrence · Enter inspect · ? help · b/Esc return",
                 dim,
             ),
         ])
@@ -271,7 +271,15 @@ fn preview_lines(
         } else {
             serde_json::json!({"command":command}).to_string()
         };
-        let reference = crate::inspector::reference_notes(tool, &input);
+        let reference = if library
+            .view
+            .as_ref()
+            .is_some_and(|v| v.level == crate::patterns::Level::Parts)
+        {
+            "Constituent tokens are highlighted in their recorded context.\nEnter inspects this call; 3 opens its command documentation.".into()
+        } else {
+            crate::inspector::reference_notes(tool, &input)
+        };
         for line in reference.lines() {
             for part in wrap(line, width.saturating_sub(4) as usize, usize::MAX) {
                 lines.push(Line::styled(part, dim));

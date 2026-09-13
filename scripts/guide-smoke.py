@@ -22,8 +22,8 @@ with tempfile.TemporaryDirectory(prefix='linger-guide-pty-') as data_dir:
         terminal.key(b'\rG');terminal.expect('Specimen 1/1')  # reopening never increments
     with Session('examples/structure.jsonl',data_dir) as terminal:
         terminal.key(b'G');terminal.expect('1 entries')  # new session does not auto-collect
-        terminal.key(b'G');terminal.key(b'b/rg -n\r\r');terminal.expect('Fictional result 0')
-        terminal.key(b'b/rg -n\rl\r');terminal.expect('Fictional result 4')
+        terminal.key(b'G');terminal.key(b'bf/rg -n\r\r');terminal.expect('Fictional result 0')
+        terminal.key(b'bf/rg -n\rl\r');terminal.expect('Fictional result 4')
         terminal.key(b'G');terminal.expect('2 entries')  # only rg and its shell wrapper
         terminal.capture('field-guide-grown')
         terminal.key(b'/rg\r\r');terminal.expect('Read the pattern and path separately.');terminal.expect('Specimen 1/3')
