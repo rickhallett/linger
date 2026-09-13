@@ -19,7 +19,8 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let palette = app.flow.theme.palette();
     let bg = Style::default().bg(palette.surface).fg(palette.text);
     let accent = bg.fg(palette.accent);
-    let muted = bg.fg(palette.muted);
+    let muted = bg.fg(palette.subtle);
+    let border = bg.fg(palette.muted);
     let [heading, body, footer] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Fill(1),
@@ -31,7 +32,18 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .agent(&i.agent)
         .map_or(0, |a| a.tool_calls().len());
     let buffered = app.timeline.items.len().saturating_sub(app.timeline.folded);
-    frame.render_widget(Paragraph::new(format!(" Linger / {} / {} calls    {} events ahead\n Enter drill in · Esc back · ,/. step event · [/] prompt · g live · space pause", safe_text(&i.agent), count, buffered)).style(bg), heading);
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled(" linger / ", accent.add_modifier(Modifier::BOLD)),
+                Span::styled(format!("{} / {} calls", safe_text(&i.agent), count), bg),
+                Span::styled(format!("    {} events ahead", buffered), muted),
+            ]),
+            Line::styled(" Enter drill in · Esc back · space pause", muted),
+        ])
+        .style(bg),
+        heading,
+    );
     let [calls_area, detail_area] =
         Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]).areas(body);
     let calls: Vec<_> = app
@@ -67,15 +79,16 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
+                .border_type(super::theme::BORDER)
                 .title(if i.detail {
                     " Calls "
                 } else {
                     " Calls · j/k "
                 })
-                .border_style(if i.detail { muted } else { accent }),
+                .border_style(if i.detail { border } else { accent }),
         )
-        .highlight_style(bg.fg(palette.accent).add_modifier(Modifier::BOLD))
-        .highlight_symbol("› ");
+        .highlight_style(super::theme::selected())
+        .highlight_symbol(super::theme::SELECTION_RAIL);
     let mut state = ListState::default().with_selected(position.map(|n| n - start));
     frame.render_stateful_widget(list, calls_area, &mut state);
     let title = [
@@ -89,7 +102,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         Span::styled(
             format!(" {} ", label),
             if t == i.tab {
-                accent.add_modifier(Modifier::BOLD)
+                super::theme::selected()
             } else {
                 muted
             },
@@ -98,8 +111,9 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     .collect::<Vec<_>>();
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(super::theme::BORDER)
         .title(Line::from(title))
-        .border_style(if i.detail { accent } else { muted })
+        .border_style(if i.detail { accent } else { border })
         .style(bg);
     let inner = block.inner(detail_area);
     frame.render_widget(block, detail_area);

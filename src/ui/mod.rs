@@ -14,14 +14,15 @@ pub(crate) mod edges;
 pub(crate) mod inspector;
 pub(crate) mod nodes;
 pub(crate) mod panel;
+pub(crate) mod theme;
 
 use crate::fact::{FactKind, Outcome};
-use rataflow::{Background, MiniMap, MiniMapPosition};
+use rataflow::{Background, BackgroundStyle, MiniMap, MiniMapPosition, MiniMapStyle};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Sparkline, SparklineBar};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Sparkline, SparklineBar};
 
 use crate::state::session::LogKind;
 use crate::state::{App, Camera, Mode, Transport};
@@ -167,6 +168,7 @@ fn render_info(frame: &mut Frame, area: Rect, app: &App) {
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(crate::ui::theme::BORDER)
         .border_style(bg.fg(palette.accent))
         .style(bg)
         .title_top(
@@ -476,7 +478,8 @@ fn render_timeline_panel(frame: &mut Frame, area: Rect, app: &mut App, show_log:
     let border = bg.fg(palette.subtle);
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
+        .border_type(theme::BORDER)
+        .title(" Time · ,/. event · [/] prompt · g latest ")
         .border_style(border)
         .style(bg);
     let inner = block.inner(area);
@@ -668,6 +671,7 @@ fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette) {
 
     let block = Block::default()
         .borders(Borders::ALL)
+        .border_type(crate::ui::theme::BORDER)
         .border_style(bg.fg(palette.accent))
         .style(bg)
         .title_top(
@@ -694,7 +698,11 @@ fn render_canvas(frame: &mut Frame, area: Rect, app: &mut App, show_minimap: boo
         return;
     }
 
-    frame.render_widget(Background::new(&app.flow), area);
+    frame.render_widget(
+        Background::new(&app.flow)
+            .style(BackgroundStyle::default().with_pattern_color(theme::GRID)),
+        area,
+    );
     frame.render_widget(&mut app.flow, area);
     // Chips right after the flow (frame-exact anchors), under the minimap.
     // `now_reference` drives the live-ticking duration on a single-tool chip.
@@ -702,7 +710,9 @@ fn render_canvas(frame: &mut Frame, area: Rect, app: &mut App, show_minimap: boo
     chips::render(&app.chips, &app.flow, &app.session, now, frame.buffer_mut());
     if show_minimap {
         frame.render_widget(
-            MiniMap::new(&app.flow).position(MiniMapPosition::TopRight),
+            MiniMap::new(&app.flow)
+                .position(MiniMapPosition::TopRight)
+                .style(MiniMapStyle::default().with_viewport_color(theme::GRID)),
             area,
         );
     }
@@ -737,12 +747,12 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
     };
 
     let mut left: Vec<Span> = vec![
-        // Wordmark: the gold identity chip in every screenshot.
+        // Quiet wordmark, distinct from the adjacent transport badge.
         Span::styled(
-            " Linger ",
+            " linger / ",
             Style::default()
-                .bg(palette.accent)
-                .fg(palette.canvas_bg)
+                .bg(palette.surface)
+                .fg(palette.accent)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(" ", bg),

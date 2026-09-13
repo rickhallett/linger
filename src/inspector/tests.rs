@@ -204,7 +204,7 @@ fn laptop_render_exposes_evidence_and_navigation() {
         .collect::<Vec<_>>()
         .join("\n");
     assert!(text.contains("secret-future-line"));
-    assert!(text.contains("Linger / main"));
+    assert!(text.contains("linger / main"));
     assert!(text.contains("1 Input"));
     assert!(text.contains("i Mercury"));
 }

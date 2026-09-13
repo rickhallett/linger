@@ -13,7 +13,7 @@ Implemented in the initial local build:
 - Explicit asynchronous Mercury interpretation tied to selected evidence.
 - Fictional demo and regression coverage for evidence/time/navigation.
 
-Remaining verification: use the interface on real sessions, assess the feel on a laptop, and verify Mercury with a configured provider key. Long-result responsiveness needs measured profiling beyond basic regression tests.
+The operator completed a visual pass of the first build. A live Mercury 2.5 request through OpenRouter has been verified with the fictional Python failure; navigation remained responsive. The next visual pass introduces Linger's own theme (see [visual design](VISUAL-DESIGN.md)). Long-result responsiveness and sustained real-session use still need measured profiling beyond basic regression tests.
 
 ## Personal attention
 

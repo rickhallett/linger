@@ -56,9 +56,11 @@ Live ingestion continues while the inspector is open. Selection and reading posi
 
 ## Optional Mercury interpretation
 
-Make `INCEPTION_API_KEY` available in the environment that launches Linger. The default model is `mercury-2.5`; `LINGER_MODEL` can override its identifier. Obtain and configure your own Inception key; do not put it in this repository.
+Configure either `OPENROUTER_API_KEY` (default model `inception/mercury-2.5`) or `INCEPTION_API_KEY` (default model `mercury-2.5`). Linger reads a `.env` file in the launch directory, falling back to `$XDG_CONFIG_HOME/linger/.env` or `~/.config/linger/.env`. Set `LINGER_ENV_FILE` to choose an exact file. These files are parsed as data; no shell code runs and the process environment is not modified.
 
-Only an explicit **i** or retry action sends data. It sends the selected call's input and recorded output, plus bounded reference notes, to `https://api.inceptionlabs.ai/v1/chat/completions`. Input and output are each limited to 48 KB for interpretation, with omissions labelled. This build does **not** scrub transcript secrets. Inspect sensitive material locally unless you intend to send it.
+Process credentials take precedence over file credentials; if both providers exist in the same source, Inception wins. `LINGER_MODEL` overrides the model identifier (use the selected provider's naming). Keep credentials in the ignored `.env` or your private configuration, never tracked files.
+
+Only an explicit **i** or retry action sends data. It sends the selected call's input and recorded output, plus bounded reference notes, to the selected provider: `https://openrouter.ai/api/v1/chat/completions` or `https://api.inceptionlabs.ai/v1/chat/completions`. Credentials are only sent to their matching host; redirects are disabled. Input and output are each limited to 48 KB for interpretation, with omissions labelled. This build does **not** scrub transcript secrets. Inspect sensitive material locally unless you intend to send it.
 
 Requests run asynchronously with a timeout. Interpretations are cached in memory for the evidence snapshot and are not reused as current when output changes. Without a key or a working connection, inspection and replay still work. Provider response bodies are not printed on HTTP errors.
 
@@ -69,7 +71,7 @@ Requests run asynchronously with a timeout. Interpretations are cached in memory
 - Gives bounded command reference notes for common `rg`, `ssh`, `sed`, Git and Python invocations. This is not yet explainshell's token-by-token parser or full shell coverage. Embedded code remains code and can be interpreted contextually.
 - Retains Zoetrope's transcript discovery, graph and replay foundation. Live output is only as current as the transcript; this is not direct process stdout capture.
 - Cross-session frequency distributions, persistent learning states, Practising highlights, episode loops and syntax-span explanations are not implemented yet. See [the roadmap](docs/LINGER-ROADMAP.md).
-- Mercury request formatting and failure handling can be tested locally; a local test is not evidence of a successful hosted model response.
+- A live Mercury 2.5 response through OpenRouter was verified using the fictional Python failure (13 September 2026). The explanation was visible within approximately 1.4 seconds while navigation stayed responsive. This single sample is not a latency or quality benchmark; direct Inception remains unverified live.
 
 ## Development
 
@@ -80,9 +82,15 @@ cargo clippy --all-targets --locked -- -D warnings
 cargo build --release --locked
 # Optional native PTY check (requires uv):
 uv run --with pyte python scripts/terminal-smoke.py
+# Opt-in: one live provider request, using fictional evidence only:
+uv run --with pyte python scripts/terminal-smoke.py --live-mercury
 ```
 
 Tests cover upstream transcript/replay invariants and Linger's result preservation, time boundaries, stale interpretations, keyboard search, stable selection and a laptop-sized terminal render. Fixtures under `examples/` are fictional.
+
+## Visual direction
+
+Osaka Jade from Omarchy Quattro: deep green surfaces, muted jade focus, warm olive text and vermilion failures. A solid selection rail and filled active tab keep focus visible without relying on colour alone. The graph and timeline retain their layout; square frames and a quiet wordmark connect them to the inspector. Colours and shared frame/selection styles live in [src/ui/theme.rs](src/ui/theme.rs), so the visual language can evolve independently of replay and evidence handling. See [the design notes](docs/VISUAL-DESIGN.md).
 
 ## Attribution and licence
 

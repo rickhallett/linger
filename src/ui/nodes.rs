@@ -102,6 +102,7 @@ impl NodeContent for AgentNode {
 
         let mut block = Block::default()
             .borders(Borders::ALL)
+            .border_type(crate::ui::theme::BORDER)
             .border_style(border_style)
             .style(bg_style);
 

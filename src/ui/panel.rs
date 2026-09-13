@@ -78,6 +78,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App, agent_id: &str) {
 
     let mut block = Block::default()
         .borders(Borders::ALL)
+        .border_type(crate::ui::theme::BORDER)
         .border_style(Style::default().fg(palette.muted).bg(palette.surface))
         .style(bg)
         .padding(Padding::horizontal(1))
