@@ -363,7 +363,7 @@ fn readable_output(text: &str, depth: usize) -> String {
                     "output" | "stdout" | "stderr" | "aggregated_output"
                 )
             }) {
-                sections.push(format!("{}\n{}", key, readable_output(body, depth + 1)));
+                sections.push(format!("{}\n\n{}", key, readable_output(body, depth + 1)));
             } else {
                 sections.push(format!("{}: {}", key, value));
             }

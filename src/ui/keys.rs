@@ -5,7 +5,7 @@ use ratatui::{
 };
 use web_time::{Duration, Instant};
 
-const HOLD: Duration = Duration::from_millis(650);
+const HOLD: Duration = Duration::from_millis(250);
 #[derive(Default)]
 pub struct Feedback {
     recent: Option<(String, Instant)>,

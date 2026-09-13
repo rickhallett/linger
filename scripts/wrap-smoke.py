@@ -15,6 +15,7 @@ with tempfile.TemporaryDirectory(prefix='linger-wrap-pty-') as data_dir:
     fixture.write_text('\n'.join(json.dumps(record) for record in records) + '\n')
     with module.Session(str(fixture), data_dir) as terminal:
         terminal.key(b'\r\r2'); terminal.expect('OUTPUT_TAIL')
+        terminal.capture('inspector-spaced-output')
         terminal.key(b'W'); assert 'OUTPUT_TAIL' not in terminal.text()
         terminal.key(b'W'); terminal.expect('OUTPUT_TAIL')
         terminal.key(b'/BOTTOM_TAIL\r'); terminal.expect('Match on line'); terminal.expect('BOTTOM_TAIL')
@@ -24,4 +25,10 @@ with tempfile.TemporaryDirectory(prefix='linger-wrap-pty-') as data_dir:
         terminal.key(b'W'); terminal.expect('INPUT_TAIL')
         terminal.capture('inspector-wrapped-input')
         terminal.key(b'4'); terminal.expect('No interpretation'); terminal.expect('when evidence'); terminal.expect('changes.')
+        terminal.capture('inspector-spaced-interpretation')
+        prose = next(row for row in terminal.screen.display if 'No interpretation' in row)
+        assert prose[36:prose.index('No interpretation')].strip() == '│'
+        # Other tabs still expose a numbered evidence gutter.
+        terminal.key(b'1'); terminal.expect('INPUT_TAIL')
+        assert any(row[37:43].strip() == '1' for row in terminal.screen.display)
 print(json.dumps({'terminal': '120x40 PTY', 'checks': ['input and output wrap', 'raw input wraps', 'unwrap and rewrap', 'search and scroll to wrapped output', 'interpretation wraps'], 'provider_requests': 0}))

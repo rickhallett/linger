@@ -1,8 +1,11 @@
 """Code-mode extraction and shortcut feedback in a real 120x40 PTY; synthetic input."""
-import importlib.util, tempfile, json
+import importlib.util, tempfile, json, os
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('patterns', 'scripts/pattern-smoke.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+
+def pulse(terminal, keys):
+    os.write(terminal.master, keys); terminal.pump(.08)
 
 def lit(terminal, letter):
     return [(x,y) for y in range(40) for x in range(120)
@@ -13,9 +16,9 @@ with tempfile.TemporaryDirectory(prefix='linger-nested-pty-') as data:
     with module.Session('examples/nested.jsonl', data) as t:
         t.key(b'b');t.expect('Parts')
         assert 'Counts are calls containing' not in t.text()
-        t.key(b'f');t.expect('Combinations');assert lit(t, 'f'),t.text()
+        pulse(t, b'f');assert lit(t, 'f'),t.text();t.expect('Combinations')
         t.capture('shortcut-feedback')
-        t.pump(.7);assert not lit(t, 'f')
+        t.pump(.3);assert not lit(t, 'f')
         t.key(b'c');t.expect('Parts')
         t.key(b'/rg -n\r');t.expect('1 here');t.expect('Recorded input')
         # Only the two actual cmd values, never the misleading label literal.
@@ -23,9 +26,9 @@ with tempfile.TemporaryDirectory(prefix='linger-nested-pty-') as data:
                             if t.screen.buffer[y][x].bg == '32473b')
         assert highlighted.count('rg') == 2, (highlighted,t.text())
         t.capture('nested-pattern-source')
-        t.key(b'\r');t.expect('Reading');t.expect('Fictional nested output 0');assert lit(t,'E')
-        t.key(b'3');t.expect('shell 1/2');t.expect('Part 1/4')
-        assert lit(t,'3');t.capture('nested-shell-one')
+        pulse(t, b'\r');assert lit(t,'E');t.expect('Reading');t.expect('Fictional nested output 0')
+        pulse(t, b'3');assert lit(t,'3');t.expect('shell 1/2');t.expect('Part 1/4')
+        t.capture('nested-shell-one')
         t.key(b'l');t.expect('Part 2/4');t.expect('line number')
         t.key(b'}');t.expect('shell 2/2');t.expect('git diff --stat');t.expect('Part 1/')
         t.capture('nested-shell-two')

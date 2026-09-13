@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Padding, Paragraph},
 };
 
 pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
@@ -15,7 +15,11 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]).areas(area);
     if let Some(i) = &mut app.inspector {
         i.content_width = usize::from(content_area.width)
-            .saturating_sub(if i.tab == Tab::Explain { 7 } else { 9 })
+            .saturating_sub(if matches!(i.tab, Tab::Explain | Tab::Interpret) {
+                7
+            } else {
+                9
+            })
             .max(1);
     }
     app.refresh_inspector();
@@ -69,7 +73,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let position = calls.iter().position(|c| Some(&c.id) == i.call.as_ref());
     let start = position
         .unwrap_or(0)
-        .saturating_sub(calls_area.height.saturating_sub(4) as usize / 4);
+        .saturating_sub(calls_area.height.saturating_sub(4) as usize / 6);
     let rows: Vec<_> = calls
         .iter()
         .skip(start)
@@ -81,28 +85,36 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 crate::state::session::ToolState::Err => "✗",
             };
             let learning = app.visible_learning(&i.agent, &c.id);
+            let status = match c.state {
+                crate::state::session::ToolState::Pending => muted,
+                crate::state::session::ToolState::Ok => bg.fg(palette.success),
+                crate::state::session::ToolState::Err => bg.fg(palette.error),
+            };
             ListItem::new(vec![
-                Line::styled(
-                    format!(
-                        "{} {}{}",
-                        glyph,
+                Line::from(vec![
+                    Span::styled(format!("{glyph} "), status),
+                    Span::styled(
+                        format!(
+                            "{}{}",
+                            if learning == crate::patterns::Learning::Practising {
+                                "◎ "
+                            } else {
+                                ""
+                            },
+                            safe_text(&c.name)
+                        ),
                         if learning == crate::patterns::Learning::Practising {
-                            "◎ "
+                            bg.fg(super::theme::PRACTISING).add_modifier(Modifier::BOLD)
                         } else {
-                            ""
+                            bg.add_modifier(Modifier::BOLD)
                         },
-                        safe_text(&c.name)
                     ),
-                    if learning == crate::patterns::Learning::Practising {
-                        bg.fg(super::theme::PRACTISING).add_modifier(Modifier::BOLD)
-                    } else {
-                        bg
-                    },
-                ),
+                ]),
                 Line::styled(
                     format!("  {}", safe_text(c.summary.as_deref().unwrap_or(&c.id))),
                     muted,
                 ),
+                Line::raw(""),
             ])
         })
         .collect();
@@ -112,6 +124,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(super::theme::BORDER)
+                .padding(Padding::new(1, 1, 1, 0))
                 .title(if i.detail {
                     " Calls "
                 } else {
@@ -160,14 +173,12 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .and_then(|e| e.spans.get(i.part))
         .map(|p| super::theme::syntax(&p.kind, p.known).remove_modifier(Modifier::UNDERLINED))
         .unwrap_or(accent);
-    if i.tab == Tab::Explain {
-        // Keep a quiet margin around prose; Input and Output retain line numbers.
-        inner.x = inner.x.saturating_add(1);
-        inner.width = inner.width.saturating_sub(2);
-        if inner.height > 3 {
-            inner.y += 1;
-            inner.height -= 1;
-        }
+    // Consistent insets; evidence keeps a quiet number gutter, prose has none.
+    inner.x = inner.x.saturating_add(1);
+    inner.width = inner.width.saturating_sub(2);
+    if inner.height > 3 {
+        inner.y += 1;
+        inner.height -= 1;
     }
     if i.tab == Tab::Explain && !i.command_lines.is_empty() && inner.height >= 6 {
         let height = i
@@ -214,6 +225,14 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     }
     let scroll = i.scroll.min(i.lines.len().saturating_sub(1));
     let query = i.query.to_lowercase();
+    let mut fenced = i.tab == Tab::Interpret
+        && i.lines
+            .iter()
+            .take(scroll)
+            .filter(|line| line.trim_start().starts_with("```"))
+            .count()
+            % 2
+            == 1;
     let lines: Vec<_> = i
         .lines
         .iter()
@@ -233,21 +252,38 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
             } else {
                 bg
             };
-            Line::from(vec![
-                if i.tab == Tab::Explain {
-                    Span::styled(
-                        if n == scroll && connected {
-                            "╰─ "
-                        } else {
-                            "   "
-                        },
-                        part_style,
-                    )
-                } else {
-                    Span::styled(format!("{:>4} │ ", n + 1), muted)
-                },
-                Span::styled(line.clone(), style),
-            ])
+            let prose = matches!(i.tab, Tab::Explain | Tab::Interpret);
+            let prefix = if prose {
+                Span::styled(
+                    if n == scroll && connected {
+                        "╰─ "
+                    } else {
+                        "   "
+                    },
+                    part_style,
+                )
+            } else {
+                Span::styled(
+                    if line.is_empty() {
+                        "     ".into()
+                    } else {
+                        format!("{:>3}  ", n + 1)
+                    },
+                    border,
+                )
+            };
+            let mut spans = vec![prefix];
+            let fence = i.tab == Tab::Interpret && line.trim_start().starts_with("```");
+            if i.tab == Tab::Explain || (!query.is_empty() && line.to_lowercase().contains(&query))
+            {
+                spans.push(Span::styled(line.clone(), style));
+            } else {
+                spans.extend(evidence_spans(line, i.tab, i.raw, fenced));
+            }
+            if fence {
+                fenced = !fenced;
+            }
+            Line::from(spans)
         })
         .collect();
     frame.render_widget(
@@ -298,6 +334,84 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         .style(bg),
         footer,
     );
+}
+
+/// Styling never changes evidence characters or treats recorded text as markup
+/// to execute. Markdown emphasis is confined to model interpretation.
+fn evidence_spans(line: &str, tab: Tab, raw: bool, fenced: bool) -> Vec<Span<'static>> {
+    let palette = super::theme::theme().palette();
+    let body = Style::default().fg(palette.text);
+    let quiet = body.fg(palette.subtle);
+    let heading = body
+        .fg(super::theme::BRIGHT_TEXT)
+        .add_modifier(Modifier::BOLD);
+    let code = super::theme::syntax("argument", true);
+    let trimmed = line.trim_start();
+    if tab == Tab::Interpret {
+        if trimmed.starts_with("```") {
+            return vec![Span::styled(line.to_owned(), quiet)];
+        }
+        if fenced {
+            return vec![Span::styled(line.to_owned(), code)];
+        }
+        if trimmed.starts_with('#') && trimmed.trim_start_matches('#').starts_with(' ') {
+            return vec![Span::styled(line.to_owned(), heading)];
+        }
+        let mut spans = Vec::new();
+        let mut rest = line;
+        while let Some(at) = rest.find(['`', '*']) {
+            spans.push(Span::styled(rest[..at].to_owned(), body));
+            rest = &rest[at..];
+            let marker = if rest.starts_with("**") {
+                "**"
+            } else if rest.starts_with('`') {
+                "`"
+            } else {
+                "*"
+            };
+            if let Some(end) = rest[marker.len()..].find(marker) {
+                let end = marker.len() + end;
+                spans.push(Span::styled(marker.to_owned(), quiet));
+                spans.push(Span::styled(
+                    rest[marker.len()..end].to_owned(),
+                    if marker == "`" { code } else { heading },
+                ));
+                spans.push(Span::styled(marker.to_owned(), quiet));
+                rest = &rest[end + marker.len()..];
+            } else {
+                spans.push(Span::styled(marker.to_owned(), body));
+                rest = &rest[marker.len()..];
+            }
+        }
+        spans.push(Span::styled(rest.to_owned(), body));
+        return spans;
+    }
+    if !raw
+        && matches!(
+            trimmed,
+            "Invocation arguments" | "output" | "stdout" | "stderr" | "aggregated_output"
+        )
+    {
+        return vec![Span::styled(line.to_owned(), heading)];
+    }
+    // JSON object keys in raw/structured input remain literal, including quotes.
+    if (raw || tab == Tab::Input) && trimmed.starts_with('"') {
+        let mut escaped = false;
+        for (at, ch) in trimmed.char_indices().skip(1) {
+            if ch == '"' && !escaped {
+                if trimmed[at + 1..].trim_start().starts_with(':') {
+                    let end = line.len() - trimmed.len() + at + 1;
+                    return vec![
+                        Span::styled(line[..end].to_owned(), code),
+                        Span::styled(line[end..].to_owned(), body),
+                    ];
+                }
+                break;
+            }
+            escaped = ch == '\\' && !escaped;
+        }
+    }
+    vec![Span::styled(line.to_owned(), body)]
 }
 
 /// Route from the selected display cells into the explanation gutter. The
@@ -432,6 +546,40 @@ fn styled_lines(
 #[cfg(test)]
 mod syntax_tests {
     use super::*;
+    #[test]
+    fn evidence_styling_preserves_unicode_escapes_and_markdown_characters() {
+        for line in [
+            r#"  "café\"key": "界", "count": 12"#,
+            "# Finding",
+            "An **empty list** causes `ZeroDivisionError` — check *first*.",
+            "    print('界')",
+            "```python",
+            "unmatched ** and ` remain literal",
+        ] {
+            for tab in [Tab::Input, Tab::Output, Tab::Interpret] {
+                for raw in [false, true] {
+                    let spans = evidence_spans(line, tab, raw, false);
+                    assert_eq!(
+                        spans.iter().map(|s| s.content.as_ref()).collect::<String>(),
+                        line
+                    );
+                }
+            }
+        }
+        let line = "**Recorded output is not Markdown styling**";
+        assert!(
+            !evidence_spans(line, Tab::Output, false, false)
+                .iter()
+                .any(|s| s.style.add_modifier.contains(Modifier::BOLD))
+        );
+        assert!(
+            evidence_spans(line, Tab::Interpret, false, false)
+                .iter()
+                .any(|s| s.style.add_modifier.contains(Modifier::BOLD))
+        );
+        assert_eq!(evidence_spans(line, Tab::Interpret, false, true).len(), 1);
+    }
+
     #[test]
     fn connector_tracks_selected_display_cells_after_unicode_and_wrapping() {
         let command = "echo 界\t-n\nnext";
