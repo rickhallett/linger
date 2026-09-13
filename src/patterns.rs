@@ -449,6 +449,9 @@ impl App {
             self.library.notice=Some("This example is cached from another session. Open that recording to inspect its output.".into());
             return;
         };
+        self.open_occurrence(o);
+    }
+    pub(crate) fn open_occurrence(&mut self, o: Occurrence) {
         // Jump deliberately to the last recorded event for this occurrence.
         let at = self
             .timeline
@@ -479,6 +482,7 @@ impl App {
             detail: true,
             ..Default::default()
         });
+        self.collect_inspected();
     }
 }
 

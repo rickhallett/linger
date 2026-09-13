@@ -95,17 +95,21 @@ Inline code bodies are hidden from the default combination ranking. **S** includ
 
 **f** changes structural level. For `["/bin/zsh", "-lc", "rg -n needle src"]`, Programs counts `/bin/zsh` and `rg`; Wrappers counts `/bin/zsh -lc`; Combinations includes the wrapper with the command form and the inner `rg` form. Supported pipelines also expose their constituent command forms. A row counts **calls containing that form**, at most once per call. Rows overlap and must not be summed as unique calls. This is a bounded structural index, not every possible token subset.
 
+Timeline keys **[/]**, **g/End**, **,/.** and **Space** work while Patterns is open. **?** shows its controls; Esc closes help before closing Patterns. While typing a search, those characters remain search text.
+
 Each row distinguishes **here**, **all cached occurrences**, and **distinct sessions**. Counts cover entire opened recordings, independent of the playhead. Replaying or reopening a call does not increment its count. The cache grows as you open sessions; Linger does not scan your unseen history. Cached-only patterns have a recorded input example; open the original recording to inspect its output.
 
 Practising patterns carry a yellow **◎** in the inspector and replay timeline. Learned hides a pattern from the learning view, preserving every call in execution history. States are your explicit choices; Linger does not infer mastery or promote them automatically. Changes made by another running viewer appear on restart; `r` refreshes command counts.
 
 Common `rg`, numeric `sed -n` printing, `git status`, and bounded `ssh` forms have conservative usage keys. Supported command compositions preserve their operators and order. Unsupported options, expansions, redirection and inline scripts keep exact input identities. These are browsing patterns, not a full shell parser or proof of semantic equivalence. Inline Python programs remain separate unless their exact input matches.
 
-The local store defaults to `$XDG_DATA_HOME/linger/` or `~/.local/share/linger/`; `LINGER_DATA_DIR` overrides it. `patterns.sqlite3` retains command/tool input and occurrence identities; `learning.sqlite3` stores stable pattern keys, your learning choices and field notes. Outputs are not copied into the pattern cache. These local files can contain private command arguments. They are not uploaded by the library. See [pattern storage and grouping](docs/PATTERN-LIBRARY.md).
+The local store defaults to `$XDG_DATA_HOME/linger/` or `~/.local/share/linger/`; `LINGER_DATA_DIR` overrides it. `patterns.sqlite3` retains command/tool input and occurrence identities; `learning.sqlite3` stores stable pattern keys, your learning choices, field notes and collected input specimens. Outputs are not copied into the pattern cache. These local files can contain private command arguments. They are not uploaded by the library. See [pattern storage and grouping](docs/PATTERN-LIBRARY.md).
 
 ## Field guide
 
-Press **G** for a shelf of commands encountered in sessions you have opened. Each entry grows with its command forms, highlighted specimens, earliest recorded date and your own field note. Counts cover whole opened recordings, independently of the playhead. The guide shares the pattern library's cache and learning states.
+Press **G** for your collected commands. **Drilling into a tool call collects that specimen**: Enter from the call list, opening an inspector content tab, or jumping to an occurrence from Patterns. Opening a recording or browsing call-list rows does not collect anything. Reopening the same call never adds a duplicate.
+
+Each entry grows with the forms and highlighted inputs you have actually inspected, plus your own field note. Guide counts are collected specimens; frequency counts remain all recorded occurrences. Existing frequency history is not imported as a collection. Notes and learning choices are retained.
 
 | Key | Action |
 |---|---|
@@ -114,14 +118,14 @@ Press **G** for a shelf of commands encountered in sessions you have opened. Eac
 | G | Return to the previous view; reopen at the same entry |
 | Esc | Back to the shelf, then return |
 | / then Enter | Search command names, collected forms and your notes |
-| Tab | All collected entries / commands present in this recording |
+| Tab | All collected entries / entries collected from this recording |
 | n | Edit the entry's field note; Enter saves, Esc cancels |
 | w / p / L / u | Want to understand / Practising / Learned / Unmarked |
 | PgUp / PgDn | Scroll the specimen |
 
 Names that match your search come before entries with matching related forms. Inline programs appear as specimens under their interpreter; unique script bodies do not become separate forms. Learned entries remain in the guide. There are no prefilled, unencountered entries.
 
-Current-recording specimens can be cycled and opened in the inspector, where **3** explores the command. Cached-only forms retain one representative input each; full cross-session output navigation still requires opening the original recording. Notes are local, up to 4 KiB per entry, and survive command-cache rebuilding. Changes from another running viewer appear after restarting. Browsing and note-taking make no model requests.
+Collected specimens can be cycled across sessions. Those from the current recording can be opened in the inspector, where **3** explores the command; another recording must be opened separately to inspect its output. Notes are local, up to 4 KiB per entry. Both notes and collected inputs survive command-cache rebuilding. Changes from another running viewer appear after restarting. Browsing and note-taking make no model requests.
 
 ## Optional Mercury interpretation
 

@@ -544,3 +544,30 @@ fn inline_scripts_are_hidden_but_search_and_toggle_recover_originals() {
     assert_eq!(library.selected().unwrap().label, "/bin/zsh -lc");
     assert_eq!(library.current.len(), 2);
 }
+
+#[test]
+fn collection_survives_restart_and_cache_rebuild_without_importing_occurrences() {
+    let root = std::env::temp_dir().join(format!("linger-collection-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let o = Occurrence {
+        session: "session".into(),
+        agent: "main".into(),
+        call: "one".into(),
+        order: "2026-09-13T12:00:00Z".into(),
+        pattern: pattern("Bash", r#"{"command":"rg -n TODO src"}"#).unwrap(),
+    };
+    {
+        let mut store = storage::Store::open(&root).unwrap();
+        store.index(std::slice::from_ref(&o)).unwrap();
+        assert!(store.collection().unwrap().is_empty());
+        store.collect(&[o.clone(), o.clone()]).unwrap();
+        assert_eq!(store.collection().unwrap(), vec![o.clone()]);
+    }
+    std::fs::remove_file(root.join("patterns.sqlite3")).unwrap();
+    {
+        let store = storage::Store::open(&root).unwrap();
+        assert!(store.aggregates().unwrap().is_empty());
+        assert_eq!(store.collection().unwrap(), vec![o]);
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}

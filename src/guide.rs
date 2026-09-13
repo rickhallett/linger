@@ -1,6 +1,11 @@
 //! A field guide projected from actual collected command encounters.
-use crate::patterns::{Level, Library, Pattern, Row};
+use crate::patterns::{Level, Library, Occurrence, Pattern, Row};
 use std::collections::BTreeMap;
+
+type SpecimenId = (String, String, String);
+fn identity(o: &Occurrence) -> SpecimenId {
+    (o.session.clone(), o.agent.clone(), o.call.clone())
+}
 
 pub struct Entry {
     pub program: Row,
@@ -23,7 +28,11 @@ pub struct Guide {
     pub pending_notes: Vec<(String, String)>,
     pub notice: Option<String>,
     pub entries: Vec<Entry>,
-    revision: Option<u64>,
+    pub collected: BTreeMap<SpecimenId, Occurrence>,
+    pub pending_collections: Vec<Occurrence>,
+    collection_revision: u64,
+    specimens: BTreeMap<String, Vec<SpecimenId>>,
+    revision: Option<(u64, String)>,
 }
 
 pub fn original(row: &Row) -> Pattern {
@@ -42,11 +51,75 @@ pub fn original(row: &Row) -> Pattern {
         })
 }
 impl Guide {
+    pub fn collect(&mut self, o: Occurrence, persist: bool) -> bool {
+        if self.collected.contains_key(&identity(&o)) {
+            return false;
+        }
+        self.collected.insert(identity(&o), o.clone());
+        if persist {
+            self.pending_collections.push(o);
+        }
+        self.collection_revision += 1;
+        true
+    }
+    pub fn examples(&self, key: &str, session: &str) -> Vec<&Occurrence> {
+        let mut examples: Vec<_> = self
+            .specimens
+            .get(key)
+            .into_iter()
+            .flatten()
+            .filter_map(|id| self.collected.get(id))
+            .collect();
+        examples.sort_by_key(|o| {
+            (
+                o.session != session,
+                &o.order,
+                &o.session,
+                &o.agent,
+                &o.call,
+            )
+        });
+        examples
+    }
     pub fn refresh(&mut self, library: &Library) {
-        if self.revision == Some(library.revision) {
+        let revision = (self.collection_revision, library.session.clone());
+        if self.revision.as_ref() == Some(&revision) {
             return;
         }
-        let rows = library.all_rows();
+        self.specimens.clear();
+        let mut rows = BTreeMap::<String, Row>::new();
+        let mut sessions = BTreeMap::<String, std::collections::BTreeSet<String>>::new();
+        for (id, o) in &self.collected {
+            for p in crate::patterns::projections(&o.pattern) {
+                self.specimens
+                    .entry(p.key.clone())
+                    .or_default()
+                    .push(id.clone());
+                let spread = sessions.entry(p.key.clone()).or_default();
+                spread.insert(o.session.clone());
+                let row = rows.entry(p.key.clone()).or_insert_with(|| Row {
+                    key: p.key,
+                    label: p.label,
+                    example: o.pattern.command.clone(),
+                    tool: o.pattern.tool.clone(),
+                    here: 0,
+                    total: 0,
+                    spread: 0,
+                    level: p.level,
+                    inline: p.inline,
+                    first_seen: None,
+                });
+                row.total += 1;
+                row.here += usize::from(o.session == library.session);
+                row.spread = spread.len();
+                if let Some(first) = crate::patterns::recorded_time(&o.order)
+                    && row.first_seen.as_ref().is_none_or(|old| first < *old)
+                {
+                    row.first_seen = Some(first);
+                }
+            }
+        }
+        let rows: Vec<_> = rows.into_values().collect();
         let mut entries: BTreeMap<String, Entry> = rows
             .iter()
             .filter(|r| r.level == Level::Programs)
@@ -84,7 +157,7 @@ impl Guide {
         for e in &mut self.entries {
             e.forms[1..].sort_by(|a, b| a.label.cmp(&b.label));
         }
-        self.revision = Some(library.revision);
+        self.revision = Some(revision);
         self.reconcile();
     }
     pub fn visible(&self) -> Vec<&Entry> {
@@ -200,6 +273,43 @@ impl Guide {
     }
 }
 impl crate::state::App {
+    pub fn collect_inspected(&mut self) {
+        let Some(i) = self.inspector.as_ref().filter(|i| i.detail) else {
+            return;
+        };
+        let Some(call) = i.call.clone() else {
+            return;
+        };
+        let id = (self.library.session.clone(), i.agent.clone(), call.clone());
+        if self.guide.collected.contains_key(&id) {
+            return;
+        }
+        let Some(info) = self.inspected_call() else {
+            return;
+        };
+        let Some(pattern) = self
+            .session
+            .tool_evidence(&i.agent, &call, false)
+            .into_iter()
+            .find_map(|input| crate::patterns::pattern(&info.name, input))
+        else {
+            return;
+        };
+        let o = Occurrence {
+            session: id.0,
+            agent: id.1,
+            call: id.2,
+            order: info
+                .ts
+                .or(self.timeline.cursor)
+                .map(|t| t.to_rfc3339())
+                .unwrap_or_default(),
+            pattern,
+        };
+        if self.guide.collect(o, true) {
+            self.inspector.as_mut().unwrap().notice = Some("Collected for the field guide.".into());
+        }
+    }
     pub fn open_field_guide(&mut self) {
         self.guide.refresh(&self.library);
         self.guide.open = true;
@@ -208,17 +318,20 @@ impl crate::state::App {
         let Some(row) = self.guide.row().cloned() else {
             return;
         };
-        if self.library.examples(&row.key).is_empty() {
+        let examples = self.guide.examples(&row.key, &self.library.session);
+        let Some(o) = examples
+            .get(self.guide.specimen.min(examples.len().saturating_sub(1)))
+            .cloned()
+            .cloned()
+        else {
+            return;
+        };
+        if o.session != self.library.session {
             self.guide.notice =
-                Some("Cached specimen: open its original recording to inspect output.".into());
+                Some("Collected specimen: open its original recording to inspect output.".into());
             return;
         }
-        let mut view = crate::patterns::View::default();
-        view.selected = Some(row.key.clone());
-        view.example = self.guide.specimen;
-        view.rows = vec![row];
-        self.library.view = Some(view);
-        self.open_pattern_occurrence();
+        self.open_occurrence(o);
         self.guide.open = false;
     }
 }
@@ -281,7 +394,7 @@ mod tests {
         );
     }
     #[test]
-    fn guide_grows_from_encounters_and_relates_forms_by_source_location() {
+    fn guide_only_grows_from_collected_specimens_and_relates_their_forms() {
         let mut lib = Library::default();
         let mut guide = Guide::default();
         guide.refresh(&lib);
@@ -289,6 +402,13 @@ mod tests {
         observe(&mut lib, "one", "rg -n git src && git status --short", 0);
         observe(&mut lib, "one", "rg -n git src && git status --short", 0);
         guide.refresh(&lib);
+        assert!(guide.entries.is_empty());
+        for o in lib.current.values() {
+            guide.collect(o.clone(), true);
+            guide.collect(o.clone(), true);
+        }
+        guide.refresh(&lib);
+        assert_eq!(guide.pending_collections.len(), 1);
         assert_eq!(guide.entries.len(), 2);
         let rg = guide
             .entries
@@ -302,6 +422,11 @@ mod tests {
         guide.selected = Some(rg.program.key.clone());
         observe(&mut lib, "two", "awk '{print $1}' file", 10);
         guide.refresh(&lib);
+        assert_eq!(guide.entries.len(), 2);
+        for o in lib.current.values() {
+            guide.collect(o.clone(), true);
+        }
+        guide.refresh(&lib);
         assert_eq!(guide.entries.len(), 3);
         assert_eq!(guide.entry().unwrap().program.label, "rg");
     }
@@ -310,6 +435,9 @@ mod tests {
         use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
         let mut app = App::new("test".into(), Mode::Replay);
         observe(&mut app.library, "one", "rg -n TODO src", 0);
+        for o in app.library.current.values() {
+            app.guide.collect(o.clone(), true);
+        }
         app.open_field_guide();
         app.guide.detail = true;
         let key = |app: &mut App, code| {
@@ -340,21 +468,9 @@ mod tests {
     fn cached_specimen_does_not_jump_to_unrelated_current_evidence() {
         let mut app = App::new("test".into(), Mode::Replay);
         observe(&mut app.library, "one", "rg -n TODO src", 0);
-        let row = app
-            .library
-            .all_rows()
-            .into_iter()
-            .find(|r| r.level == Level::Programs)
-            .unwrap();
-        app.library.cached.push(crate::patterns::Aggregate {
-            key: row.key,
-            label: row.label,
-            example: row.example,
-            tool: row.tool,
-            sessions: BTreeMap::from([("test".into(), 1)]),
-            level: Level::Programs,
-            ..Default::default()
-        });
+        for o in app.library.current.values() {
+            app.guide.collect(o.clone(), true);
+        }
         app.library.reset("other");
         app.open_field_guide();
         app.guide.detail = true;
@@ -366,7 +482,7 @@ mod tests {
                 .notice
                 .as_ref()
                 .unwrap()
-                .contains("Cached specimen")
+                .contains("Collected specimen")
         );
     }
 }

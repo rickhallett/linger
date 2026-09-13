@@ -11,6 +11,7 @@ pub enum Request {
     Index(Vec<Occurrence>),
     Set(String, Learning),
     Note(String, String),
+    Collect(Vec<Occurrence>),
     Refresh,
 }
 pub enum Reply {
@@ -19,6 +20,8 @@ pub enum Reply {
     Saved(Result<(), String>),
     Notes(BTreeMap<String, String>),
     NoteSaved(Result<(), String>),
+    Collection(Vec<Occurrence>),
+    Collected(Result<(), String>),
     Error(String),
 }
 pub struct Store {
@@ -62,7 +65,7 @@ impl Store {
                 .map_err(db_error)?;
         }
         index.execute_batch("CREATE TABLE IF NOT EXISTS occurrences(session TEXT NOT NULL, agent TEXT NOT NULL, call TEXT NOT NULL, ordering TEXT NOT NULL, pattern TEXT NOT NULL, label TEXT NOT NULL, command TEXT NOT NULL, tool TEXT NOT NULL, PRIMARY KEY(session,agent,call)); CREATE INDEX IF NOT EXISTS occurrence_pattern ON occurrences(pattern,session); PRAGMA user_version=1;").map_err(db_error)?;
-        learning.execute_batch("CREATE TABLE IF NOT EXISTS learning(pattern TEXT PRIMARY KEY, state TEXT NOT NULL); CREATE TABLE IF NOT EXISTS notes(pattern TEXT PRIMARY KEY, text TEXT NOT NULL); PRAGMA user_version=1;").map_err(db_error)?;
+        learning.execute_batch("CREATE TABLE IF NOT EXISTS learning(pattern TEXT PRIMARY KEY, state TEXT NOT NULL); CREATE TABLE IF NOT EXISTS notes(pattern TEXT PRIMARY KEY, text TEXT NOT NULL); CREATE TABLE IF NOT EXISTS specimens(session TEXT NOT NULL, agent TEXT NOT NULL, call TEXT NOT NULL, occurrence TEXT NOT NULL, PRIMARY KEY(session,agent,call)); PRAGMA user_version=1;").map_err(db_error)?;
         Ok(Self { index, learning })
     }
     pub fn index(&mut self, rows: &[Occurrence]) -> Result<(), String> {
@@ -144,6 +147,29 @@ impl Store {
         self.learning.execute("INSERT INTO notes(pattern,text) VALUES (?1,?2) ON CONFLICT(pattern) DO UPDATE SET text=excluded.text", params![key, text]).map_err(db_error)?;
         Ok(())
     }
+    pub fn collect(&mut self, specimens: &[Occurrence]) -> Result<(), String> {
+        let tx = self.learning.transaction().map_err(db_error)?;
+        for o in specimens {
+            let value =
+                serde_json::to_string(o).map_err(|_| "Cannot save specimen.".to_string())?;
+            tx.execute("INSERT OR IGNORE INTO specimens(session,agent,call,occurrence) VALUES (?1,?2,?3,?4)", params![o.session, o.agent, o.call, value]).map_err(db_error)?;
+        }
+        tx.commit().map_err(db_error)
+    }
+    pub fn collection(&self) -> Result<Vec<Occurrence>, String> {
+        let mut query = self
+            .learning
+            .prepare("SELECT occurrence FROM specimens ORDER BY session,agent,call")
+            .map_err(db_error)?;
+        let rows = query
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(db_error)?;
+        rows.map(|r| {
+            serde_json::from_str(&r.map_err(db_error)?)
+                .map_err(|_| "Cannot read collected specimen; stored data retained.".into())
+        })
+        .collect()
+    }
     pub fn notes(&self) -> Result<BTreeMap<String, String>, String> {
         let mut query = self
             .learning
@@ -222,6 +248,14 @@ pub fn worker() -> (
                 let _ = reply_tx.send(Reply::NoteSaved(Err(error)));
             }
         }
+        match store.collection() {
+            Ok(collection) => {
+                let _ = reply_tx.send(Reply::Collection(collection));
+            }
+            Err(error) => {
+                let _ = reply_tx.send(Reply::Collected(Err(error)));
+            }
+        }
         while let Some(request) = rx.blocking_recv() {
             let reply = match request {
                 Request::Index(rows) => {
@@ -230,6 +264,7 @@ pub fn worker() -> (
                         Err(e) => Reply::Error(e),
                     }
                 }
+                Request::Collect(specimens) => Reply::Collected(store.collect(&specimens)),
                 Request::Note(key, text) => Reply::NoteSaved(store.note(&key, &text)),
                 Request::Set(key, state) => Reply::Saved(store.set(&key, state)),
                 Request::Refresh => match store.aggregates() {

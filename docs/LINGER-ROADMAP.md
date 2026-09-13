@@ -30,7 +30,7 @@ The first index accumulates opened sessions, supports bounded usage forms and ex
 
 ## Field guide
 
-First local version: `G` opens a shelf populated by encountered programs. Entries collect related forms, highlighted input specimens, earliest recorded dates and persistent field notes. Current specimens jump into the inspector; cached-only examples keep their original-session boundary. Program learning states share the existing library and Practising highlights. No extra model requests are needed. The next decision is how this feels during ordinary use; richer specimen curation and direct cross-session jumps remain open.
+`G` opens a shelf populated only by calls deliberately drilled into. Entering call detail or jumping from frequency collects a specimen; ingestion and browsing the call list do not. Repeated inspection is deduplicated by recording, agent and call. Frequency remains independent. Entries collect related forms, highlighted input specimens, earliest recorded dates and persistent field notes. Collected specimens persist separately from the frequency cache and can be cycled across sessions. Current specimens jump into the inspector; others keep their original-session output boundary. Program learning states share the existing library and Practising highlights. No extra model requests are needed. The next decision is how this feels during ordinary use; richer specimen curation and direct cross-session jumps remain open.
 
 ## Richer explanation and replay
 

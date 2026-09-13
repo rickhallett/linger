@@ -109,7 +109,12 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     render_status_bar(frame, status_area, app);
 
     if app.show_help {
-        render_help(frame, area, &app.flow.theme.palette());
+        render_help(
+            frame,
+            area,
+            &app.flow.theme.palette(),
+            app.library.view.is_some(),
+        );
     }
     if app.show_info {
         render_info(frame, area, app);
@@ -594,7 +599,7 @@ fn render_log_line(frame: &mut Frame, row: Rect, app: &App) {
 }
 
 /// Centered help overlay: full key reference + status-glyph legend.
-fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette) {
+fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette, patterns: bool) {
     let w = area.width.min(60);
     let h = area.height.min(20);
     if w < 24 || h < 9 {
@@ -621,7 +626,7 @@ fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette) {
         "q · ctrl-c"
     };
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(""),
         Line::from(vec![
             Span::styled(" inspect   ", key),
@@ -690,6 +695,35 @@ fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette) {
             Span::styled("green edges = agent running", dim),
         ]),
     ];
+
+    if patterns {
+        lines = [
+            ("patterns", "j/k select · h/l occurrences · Enter inspect"),
+            ("scope", "Tab recording/all · f grouping level"),
+            ("filter", "S scripts · H Learned · / search"),
+            ("learning", "w Want · p Practising · L Learned · u clear"),
+            ("cache", "r refresh command counts"),
+            ("timeline", "[ / ] previous/next prompt · g/End latest"),
+            ("events", ", / . previous/next event"),
+            ("pacing", "space pause/resume"),
+            ("return", "b/Esc close patterns · G field guide"),
+            ("help", "? toggle · Esc close help"),
+            ("quit", quit_hint),
+        ]
+        .into_iter()
+        .map(|(name, help)| {
+            Line::from(vec![
+                Span::styled(format!(" {name:<10}"), key),
+                Span::styled(help, txt),
+            ])
+        })
+        .collect();
+        lines.push(Line::raw(""));
+        lines.push(Line::styled(
+            " Counts cover whole recordings at every playhead.",
+            dim,
+        ));
+    }
 
     let block = Block::default()
         .borders(Borders::ALL)

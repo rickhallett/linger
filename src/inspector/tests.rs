@@ -386,3 +386,80 @@ fn every_tab_wraps_without_losing_evidence_and_reflows_after_resize() {
     assert!(rows[0].starts_with("    "));
     assert!(rows.iter().all(|line| line.width() <= 16));
 }
+
+#[test]
+fn only_deliberate_drill_in_collects_and_never_future_input() {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut a = app();
+    a.refresh_inspector();
+    a.open_field_guide();
+    assert!(a.guide.entries.is_empty());
+    assert!(a.guide.collected.is_empty());
+    a.guide.open = false;
+    let before = a.library.all_rows().iter().map(|r| r.total).sum::<usize>();
+    let key = |a: &mut App, code| {
+        crate::handler::handle_event(&Event::Key(KeyEvent::new(code, KeyModifiers::NONE)), a)
+    };
+    key(&mut a, KeyCode::Enter);
+    key(&mut a, KeyCode::Char('1'));
+    key(&mut a, KeyCode::Char('2'));
+    assert_eq!(a.guide.collected.len(), 1);
+    assert_eq!(a.guide.pending_collections.len(), 1);
+    assert_eq!(
+        a.library.all_rows().iter().map(|r| r.total).sum::<usize>(),
+        before
+    );
+    let saved = a
+        .guide
+        .collected
+        .values()
+        .next()
+        .unwrap()
+        .pattern
+        .command
+        .clone();
+    assert_eq!(saved, "rg -n TODO src");
+    // No evidence at this earlier playhead: a cached future occurrence is not eligible.
+    let mut b = app();
+    b.seek(chrono::DateTime::from_timestamp(1_799_999_999, 0).unwrap());
+    b.inspector.as_mut().unwrap().detail = true;
+    b.collect_inspected();
+    assert!(b.guide.collected.is_empty());
+}
+
+#[test]
+fn patterns_keep_timeline_and_help_keys_but_search_stays_modal() {
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+    let mut a = app();
+    a.open_library();
+    a.library.refresh_view();
+    let selected = a.library.view.as_ref().unwrap().selected.clone();
+    let head = a.timeline.cursor;
+    let key = |a: &mut App, code| {
+        crate::handler::handle_event(&Event::Key(KeyEvent::new(code, KeyModifiers::NONE)), a)
+    };
+    key(&mut a, KeyCode::Char('['));
+    assert!(a.timeline.cursor < head);
+    assert!(a.library.view.is_some());
+    key(&mut a, KeyCode::Char('g'));
+    assert_eq!(a.timeline.cursor, head);
+    assert!(a.timeline.follow_head);
+    let folded = a.timeline.folded;
+    key(&mut a, KeyCode::Char(','));
+    assert!(a.timeline.folded < folded);
+    key(&mut a, KeyCode::End);
+    assert_eq!(a.timeline.cursor, head);
+    key(&mut a, KeyCode::Char('?'));
+    assert!(a.show_help);
+    key(&mut a, KeyCode::Esc);
+    assert!(!a.show_help);
+    assert_eq!(a.library.view.as_ref().unwrap().selected, selected);
+    key(&mut a, KeyCode::Char('/'));
+    for c in "[g?".chars() {
+        key(&mut a, KeyCode::Char(c));
+    }
+    assert_eq!(a.library.view.as_ref().unwrap().query, "[g?");
+    assert_eq!(a.timeline.cursor, head);
+    assert!(!a.show_help);
+    assert!(a.guide.collected.is_empty());
+}

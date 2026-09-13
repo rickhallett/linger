@@ -47,6 +47,11 @@ if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='linger-pattern-pty-') as data_dir:
         with Session('examples/repair.jsonl',data_dir) as terminal:
             terminal.key(b'b/rg -n\r');terminal.expect('rg -n <pattern> <path>')
+            terminal.key(b'[');terminal.expect('11:00:00');terminal.expect('rg -n <pattern> <path>')
+            terminal.key(b'g');terminal.expect('11:00:28');terminal.expect('rg -n <pattern> <path>')
+            terminal.key(b'?');terminal.expect('g/End latest');terminal.expect('scope')
+            terminal.capture('patterns-help')
+            terminal.key(b'\x1b');terminal.expect('Recorded input')
             terminal.key(b'p');terminal.expect('Learning state saved');terminal.expect('Practising')
             terminal.key(b'\r');terminal.expect('TODO handle empty input');terminal.expect('◎')
             terminal.capture('practising-inspector')

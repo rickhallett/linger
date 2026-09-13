@@ -80,7 +80,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                         .as_deref()
                         .or(app.library.storage_error.as_deref())
                         .or(app.library.notice.as_deref())
-                        .unwrap_or("Grows from the sessions you open · notes saved locally")
+                        .unwrap_or("Drill into a call to collect it · notes saved locally")
                 ),
                 dim,
             ),
@@ -97,7 +97,7 @@ fn cards(frame: &mut Frame, area: Rect, app: &mut App) {
     app.guide.columns = columns;
     let entries = app.guide.visible();
     if entries.is_empty() {
-        frame.render_widget(Paragraph::new("Your field guide grows as you open sessions.\nTry Tab for this recording, or / to change the search.").style(dim), area);
+        frame.render_widget(Paragraph::new("Drill into a tool call to collect your first specimen.\nEntries grow from calls you inspect. Clear / or change Tab scope if filtered.").style(dim), area);
         return;
     }
     let position = entries
@@ -221,7 +221,7 @@ fn detail(frame: &mut Frame, area: Rect, app: &App) {
             ListItem::new(vec![
                 Line::styled(
                     if n == 0 {
-                        "All sightings".into()
+                        "Collected specimens".into()
                     } else {
                         safe_text(&r.label)
                     },
@@ -267,12 +267,12 @@ fn detail(frame: &mut Frame, area: Rect, app: &App) {
         lines.push(Line::styled(format!("Earliest record: {date}"), dim));
     }
     if let Some(row) = app.guide.row() {
-        let examples = app.library.examples(&row.key);
+        let examples = app.guide.examples(&row.key, &app.library.session);
         let n = app.guide.specimen.min(examples.len().saturating_sub(1));
         let pattern = if let Some(o) = examples.get(n) {
             lines.push(Line::styled(
                 format!(
-                    "Sighting {}/{} here · {} / {}",
+                    "Specimen {}/{} · {} / {}",
                     n + 1,
                     examples.len(),
                     safe_text(&o.agent),
@@ -280,6 +280,12 @@ fn detail(frame: &mut Frame, area: Rect, app: &App) {
                 ),
                 accent,
             ));
+            if o.session != app.library.session {
+                lines.push(Line::styled(
+                    "Collected in another recording · original needed for output",
+                    dim,
+                ));
+            }
             o.pattern.clone()
         } else {
             lines.push(Line::styled(

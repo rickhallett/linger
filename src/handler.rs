@@ -367,10 +367,12 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
             i.scroll = 0;
         }
         KeyCode::Char('1') => {
+            i.detail = true;
             i.tab = Tab::Input;
             i.scroll = 0;
         }
         KeyCode::Char('2') => {
+            i.detail = true;
             i.tab = Tab::Output;
             i.scroll = 0;
         }
@@ -381,6 +383,7 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
             i.scroll = 0;
         }
         KeyCode::Char('4') => {
+            i.detail = true;
             i.tab = Tab::Interpret;
             i.scroll = 0;
         }
@@ -441,6 +444,15 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
         }
         _ => {}
     }
+    if matches!(
+        key.code,
+        KeyCode::Enter
+            | KeyCode::Tab
+            | KeyCode::BackTab
+            | KeyCode::Char('1' | '2' | '3' | '4' | 'e')
+    ) {
+        app.collect_inspected();
+    }
     true
 }
 
@@ -459,6 +471,14 @@ fn library_key(key: &KeyEvent, app: &mut App) -> bool {
         return false;
     }
     match key.code {
+        KeyCode::Char('?') => app.show_help = !app.show_help,
+        KeyCode::Esc if app.show_help => app.show_help = false,
+        KeyCode::Char('[') => app.seek_prompt(false),
+        KeyCode::Char(']') => app.seek_prompt(true),
+        KeyCode::Char('g') | KeyCode::End => app.go_live(),
+        KeyCode::Char(',') => app.step_event(false),
+        KeyCode::Char('.') => app.step_event(true),
+        KeyCode::Char(' ') => app.toggle_play_pause(),
         KeyCode::Char('G') => app.open_field_guide(),
         KeyCode::Esc | KeyCode::Char('b') => app.library.view = None,
         KeyCode::Char('q') => return true,
@@ -600,10 +620,9 @@ fn guide_key(key: &KeyEvent, app: &mut App) -> bool {
         }
         KeyCode::Char('l') | KeyCode::Right => {
             if app.guide.detail {
-                let count = app
-                    .guide
-                    .row()
-                    .map_or(0, |row| app.library.examples(&row.key).len());
+                let count = app.guide.row().map_or(0, |row| {
+                    app.guide.examples(&row.key, &app.library.session).len()
+                });
                 app.guide.specimen = app
                     .guide
                     .specimen

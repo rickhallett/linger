@@ -64,7 +64,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 ),
             ]),
             Line::styled(
-                " G guide · Tab scope · f level · S scripts · j/k select · h/l occurrence · Enter inspect · b/Esc return",
+                " G guide · Tab scope · f level · S scripts · j/k select · h/l occurrence · Enter inspect · ? help · b/Esc return",
                 dim,
             ),
         ])

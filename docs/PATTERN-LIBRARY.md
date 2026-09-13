@@ -35,7 +35,7 @@ Practising markers reveal as their input becomes available at the playhead. They
 The native TUI owns a dedicated SQLite worker. It receives command observations and explicit learning changes through a channel; database work does not run on the terminal render loop. Shutdown flushes pending choices. The two databases are:
 
 - `patterns.sqlite3`: rebuildable observations, stable call identities, original command/tool input and pattern descriptions; no tool result bodies.
-- `learning.sqlite3`: pattern keys and user-selected Unmarked, Want, Practising or Learned states.
+- `learning.sqlite3`: pattern keys, user-selected learning states, field notes and explicitly collected input specimens. Collection happens on drill-in and survives rebuilding the frequency cache; ordinary occurrence ingestion never populates it.
 
 SQLite transactions and primary keys coordinate independent viewers. Upserts merge individual choices rather than overwriting an entire state file. Counts refresh on new observations or `r`; learning choices from other processes load on restart. This is local persistence, not a synchronisation service. In-memory choices update immediately; a failed save is shown as session-only. Damaged or newer databases are retained, not reset automatically.
 

@@ -115,6 +115,21 @@ pub async fn run(
                         }
                     });
                 }
+                Reply::Collection(specimens) => {
+                    for o in specimens {
+                        app.guide.collect(o, false);
+                    }
+                }
+                Reply::Collected(result) => {
+                    app.guide.notice = Some(match result {
+                        Ok(()) => "Specimen collected.".into(),
+                        Err(error) => {
+                            let message = format!("{error} Collection is session-only.");
+                            app.library.storage_error = Some(message.clone());
+                            message
+                        }
+                    });
+                }
                 Reply::Error(error) => {
                     app.library.storage_error = Some(error.clone());
                     app.library.notice = Some(error);
@@ -230,7 +245,8 @@ pub async fn run(
     while let Ok(reply) = library_rx.try_recv() {
         if let crate::patterns::storage::Reply::Error(error)
         | crate::patterns::storage::Reply::Saved(Err(error))
-        | crate::patterns::storage::Reply::NoteSaved(Err(error)) = reply
+        | crate::patterns::storage::Reply::NoteSaved(Err(error))
+        | crate::patterns::storage::Reply::Collected(Err(error)) = reply
         {
             eprintln!("{error}");
         }
@@ -288,6 +304,16 @@ fn flush_library(
     tx: &tokio::sync::mpsc::UnboundedSender<crate::patterns::storage::Request>,
 ) {
     use crate::patterns::storage::Request;
+    if !app.guide.pending_collections.is_empty()
+        && tx
+            .send(Request::Collect(std::mem::take(
+                &mut app.guide.pending_collections,
+            )))
+            .is_err()
+    {
+        app.library.storage_error =
+            Some("Collection is session-only: local storage is unavailable.".into());
+    }
     for (key, note) in std::mem::take(&mut app.guide.pending_notes) {
         if tx.send(Request::Note(key, note)).is_err() {
             app.guide.notice = Some("Note is session-only: local storage is unavailable.".into());
