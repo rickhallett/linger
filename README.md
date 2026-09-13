@@ -4,7 +4,7 @@ Watch your agents work. Stay with what matters.
 
 Linger is an open-source terminal viewer for Claude Code and Codex sessions. Follow a run live, move back through time, and drill into the exact inputs and recorded outputs of individual tool calls. Explore command parts against local documentation or ask Mercury to interpret the selected evidence.
 
-Early local build: live/replay inspection, optional local explainshell exploration, a session and cross-session pattern library, and persistent learning states with Practising highlights.
+Early local build: live/replay inspection, optional local explainshell exploration, a session and cross-session pattern library, persistent learning states with Practising highlights, and a growing command field guide.
 
 ## Run
 
@@ -33,6 +33,7 @@ Press **Enter** to open the tool inspector. Pick a call with **j/k**, then **Ent
 |---|---|
 | Enter | Graph → calls → content |
 | b | Open/close the pattern library |
+| G | Open/return from the field guide |
 | w / p / L / u in inspector | Want / Practising / Learned / Unmarked |
 | Esc | Content → calls → graph |
 | j/k or ↑/↓ | Select calls, or scroll focused content |
@@ -97,7 +98,27 @@ Practising patterns carry a yellow **◎** in the inspector and replay timeline.
 
 Common `rg`, numeric `sed -n` printing, `git status`, and bounded `ssh` forms have conservative usage keys. Supported command compositions preserve their operators and order. Unsupported options, expansions, redirection and inline scripts keep exact input identities. These are browsing patterns, not a full shell parser or proof of semantic equivalence. Inline Python programs remain separate unless their exact input matches.
 
-The local store defaults to `$XDG_DATA_HOME/linger/` or `~/.local/share/linger/`; `LINGER_DATA_DIR` overrides it. `patterns.sqlite3` retains command/tool input and occurrence identities; `learning.sqlite3` stores only stable pattern keys and your choices. Outputs are not copied into the pattern cache. These local files can contain private command arguments. They are not uploaded by the library. See [pattern storage and grouping](docs/PATTERN-LIBRARY.md).
+The local store defaults to `$XDG_DATA_HOME/linger/` or `~/.local/share/linger/`; `LINGER_DATA_DIR` overrides it. `patterns.sqlite3` retains command/tool input and occurrence identities; `learning.sqlite3` stores stable pattern keys, your learning choices and field notes. Outputs are not copied into the pattern cache. These local files can contain private command arguments. They are not uploaded by the library. See [pattern storage and grouping](docs/PATTERN-LIBRARY.md).
+
+## Field guide
+
+Press **G** for a shelf of commands encountered in sessions you have opened. Each entry grows with its command forms, highlighted specimens, earliest recorded date and your own field note. Counts cover whole opened recordings, independently of the playhead. The guide shares the pattern library's cache and learning states.
+
+| Key | Action |
+|---|---|
+| h/j/k/l or arrows | Browse cards; in an entry, j/k selects forms and h/l cycles specimens |
+| Enter | Open an entry, then inspect the selected occurrence's recorded output |
+| G | Return to the previous view; reopen at the same entry |
+| Esc | Back to the shelf, then return |
+| / then Enter | Search command names, collected forms and your notes |
+| Tab | All collected entries / commands present in this recording |
+| n | Edit the entry's field note; Enter saves, Esc cancels |
+| w / p / L / u | Want to understand / Practising / Learned / Unmarked |
+| PgUp / PgDn | Scroll the specimen |
+
+Names that match your search come before entries with matching related forms. Inline programs appear as specimens under their interpreter; unique script bodies do not become separate forms. Learned entries remain in the guide. There are no prefilled, unencountered entries.
+
+Current-recording specimens can be cycled and opened in the inspector, where **3** explores the command. Cached-only forms retain one representative input each; full cross-session output navigation still requires opening the original recording. Notes are local, up to 4 KiB per entry, and survive command-cache rebuilding. Changes from another running viewer appear after restarting. Browsing and note-taking make no model requests.
 
 ## Optional Mercury interpretation
 
@@ -128,6 +149,7 @@ cargo build --release --locked
 # Optional native PTY check (requires uv):
 uv run --with pyte python scripts/terminal-smoke.py
 uv run --with pyte python scripts/pattern-smoke.py
+uv run --with pyte python scripts/guide-smoke.py
 # With the optional local manpage pack installed:
 python3 scripts/explainshell-check.py
 uv run --with pyte python scripts/exploration-smoke.py

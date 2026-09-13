@@ -20,7 +20,23 @@ use crate::state::{App, Camera};
 pub fn handle_event(event: &Event, app: &mut App) -> bool {
     match event {
         Event::Key(key) => handle_key(key, app),
+        Event::Paste(text) if app.guide.open && app.guide.editing.is_some() => {
+            guide_insert(app, text);
+            false
+        }
         Event::Mouse(mouse) => {
+            if app.guide.open {
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => {
+                        app.guide.scroll = app.guide.scroll.saturating_add(3)
+                    }
+                    MouseEventKind::ScrollUp => {
+                        app.guide.scroll = app.guide.scroll.saturating_sub(3)
+                    }
+                    _ => {}
+                }
+                return false;
+            }
             if let Some(view) = &mut app.library.view {
                 match mouse.kind {
                     MouseEventKind::ScrollDown => view.scroll = view.scroll.saturating_add(3),
@@ -88,6 +104,9 @@ fn handle_key(key: &KeyEvent, app: &mut App) -> bool {
     if ctrl && matches!(key.code, KeyCode::Char('c' | 'C')) {
         return true;
     }
+    if app.guide.open {
+        return guide_key(key, app);
+    }
     if app.library.view.is_some() {
         return library_key(key, app);
     }
@@ -96,6 +115,10 @@ fn handle_key(key: &KeyEvent, app: &mut App) -> bool {
     }
 
     match key.code {
+        KeyCode::Char('G') => {
+            app.open_field_guide();
+            return false;
+        }
         KeyCode::Char('b') => {
             app.open_library();
             return false;
@@ -172,7 +195,7 @@ fn handle_key(key: &KeyEvent, app: &mut App) -> bool {
         }
 
         // Timeline scrubbing (DVR). `[`/`]` step the playhead to the prev/next
-        // prompt-era boundary; `End`/`g`/`G` re-pin to the live/replay edge (`g`
+        // prompt-era boundary; `End`/`g` re-pin to the live/replay edge (`g`
         // is the letter alias, vim-style "go to end", that also works in the
         // browser where `End` can be unreliable).
         KeyCode::Char('[') => {
@@ -183,7 +206,7 @@ fn handle_key(key: &KeyEvent, app: &mut App) -> bool {
             app.seek_prompt(true);
             return false;
         }
-        KeyCode::End | KeyCode::Char('g') | KeyCode::Char('G') => {
+        KeyCode::End | KeyCode::Char('g') => {
             app.go_live();
             return false;
         }
@@ -328,6 +351,7 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
             }
         }
         KeyCode::Enter => i.detail = true,
+        KeyCode::Char('G') => app.open_field_guide(),
         KeyCode::Char('b') => app.open_library(),
         KeyCode::Char('p') => app.mark_inspected(crate::patterns::Learning::Practising),
         KeyCode::Char('w') => app.mark_inspected(crate::patterns::Learning::Want),
@@ -407,7 +431,7 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
         }
         KeyCode::Tab | KeyCode::BackTab => i.detail = !i.detail,
         KeyCode::Home => i.scroll = 0,
-        KeyCode::Char('q' | 'Q' | ',' | '.' | '[' | ']' | 'g' | 'G' | ' ') | KeyCode::End => {
+        KeyCode::Char('q' | 'Q' | ',' | '.' | '[' | ']' | 'g' | ' ') | KeyCode::End => {
             return false;
         }
         _ => {}
@@ -430,6 +454,7 @@ fn library_key(key: &KeyEvent, app: &mut App) -> bool {
         return false;
     }
     match key.code {
+        KeyCode::Char('G') => app.open_field_guide(),
         KeyCode::Esc | KeyCode::Char('b') => app.library.view = None,
         KeyCode::Char('q') => return true,
         KeyCode::Tab => {
@@ -474,6 +499,131 @@ fn library_key(key: &KeyEvent, app: &mut App) -> bool {
             };
             if let Some(key) = app.library.selected().map(|r| r.key.clone()) {
                 app.library.choose(key, state);
+            }
+        }
+        _ => {}
+    }
+    false
+}
+
+fn guide_insert(app: &mut App, text: &str) {
+    if let Some((_, draft, cursor)) = &mut app.guide.editing {
+        let remaining = 4096usize.saturating_sub(draft.len());
+        let mut end = text.len().min(remaining);
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        draft.insert_str(*cursor, &text[..end]);
+        *cursor += end;
+    }
+}
+fn guide_key(key: &KeyEvent, app: &mut App) -> bool {
+    if let Some((_, draft, cursor)) = &mut app.guide.editing {
+        match key.code {
+            KeyCode::Esc => app.guide.editing = None,
+            KeyCode::Enter => app.guide.save_note(),
+            KeyCode::Left => *cursor = draft[..*cursor].char_indices().last().map_or(0, |(n, _)| n),
+            KeyCode::Right => *cursor += draft[*cursor..].chars().next().map_or(0, char::len_utf8),
+            KeyCode::Home => *cursor = 0,
+            KeyCode::End => *cursor = draft.len(),
+            KeyCode::Backspace if *cursor > 0 => {
+                let at = draft[..*cursor].char_indices().last().unwrap().0;
+                draft.drain(at..*cursor);
+                *cursor = at;
+            }
+            KeyCode::Delete if *cursor < draft.len() => {
+                let end = *cursor + draft[*cursor..].chars().next().unwrap().len_utf8();
+                draft.drain(*cursor..end);
+            }
+            KeyCode::Char(c) => guide_insert(app, &c.to_string()),
+            _ => {}
+        }
+        return false;
+    }
+    if app.guide.searching {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter => app.guide.searching = false,
+            KeyCode::Backspace => {
+                app.guide.query.pop();
+            }
+            KeyCode::Char(c) => app.guide.query.push(c),
+            _ => {}
+        }
+        if matches!(key.code, KeyCode::Char(_) | KeyCode::Backspace) {
+            app.guide.selected = None;
+        }
+        app.guide.reconcile();
+        return false;
+    }
+    match key.code {
+        KeyCode::Char('q') => return true,
+        KeyCode::Char('G') => app.guide.open = false,
+        KeyCode::Esc if app.guide.detail => app.guide.detail = false,
+        KeyCode::Esc => app.guide.open = false,
+        KeyCode::Enter if app.guide.detail => app.inspect_specimen(),
+        KeyCode::Enter => app.guide.detail = true,
+        KeyCode::Char('/') => {
+            app.guide.searching = true;
+            app.guide.query.clear();
+        }
+        KeyCode::Tab => {
+            app.guide.here_only = !app.guide.here_only;
+            app.guide.reconcile();
+        }
+        KeyCode::Char('n') if app.guide.detail => app.guide.edit_note(),
+        KeyCode::Char('j') | KeyCode::Down => {
+            if app.guide.detail {
+                app.guide.move_form(1);
+            } else {
+                app.guide.move_entry(app.guide.columns.max(1) as isize);
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if app.guide.detail {
+                app.guide.move_form(-1);
+            } else {
+                app.guide.move_entry(-(app.guide.columns.max(1) as isize));
+            }
+        }
+        KeyCode::Char('h') | KeyCode::Left => {
+            if app.guide.detail {
+                app.guide.specimen = app.guide.specimen.saturating_sub(1);
+                app.guide.scroll = 0;
+            } else {
+                app.guide.move_entry(-1);
+            }
+        }
+        KeyCode::Char('l') | KeyCode::Right => {
+            if app.guide.detail {
+                let count = app
+                    .guide
+                    .row()
+                    .map_or(0, |row| app.library.examples(&row.key).len());
+                app.guide.specimen = app
+                    .guide
+                    .specimen
+                    .saturating_add(1)
+                    .min(count.saturating_sub(1));
+                app.guide.scroll = 0;
+            } else {
+                app.guide.move_entry(1);
+            }
+        }
+        KeyCode::PageDown => app.guide.scroll = app.guide.scroll.saturating_add(10),
+        KeyCode::PageUp => app.guide.scroll = app.guide.scroll.saturating_sub(10),
+        KeyCode::Char(c @ ('w' | 'p' | 'L' | 'u')) => {
+            if let Some(key) = app.guide.selected.clone() {
+                app.guide.notice = None;
+                use crate::patterns::Learning;
+                app.library.choose(
+                    key,
+                    match c {
+                        'w' => Learning::Want,
+                        'p' => Learning::Practising,
+                        'L' => Learning::Learned,
+                        _ => Learning::Unmarked,
+                    },
+                );
             }
         }
         _ => {}

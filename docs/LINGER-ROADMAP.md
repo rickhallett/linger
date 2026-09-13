@@ -28,6 +28,10 @@ Implemented locally:
 
 The first index accumulates opened sessions, supports bounded usage forms and exact-input fallbacks, and keeps SQLite command observations separate from learning choices. Counts show whole recordings; the inspector still follows the playhead. `b` opens the library; `Tab` changes scope. Practising uses a yellow ◎ in the inspector and timeline. Cached-only recordings currently require opening their source separately.
 
+## Field guide
+
+First local version: `G` opens a shelf populated by encountered programs. Entries collect related forms, highlighted input specimens, earliest recorded dates and persistent field notes. Current specimens jump into the inspector; cached-only examples keep their original-session boundary. Program learning states share the existing library and Practising highlights. No extra model requests are needed. The next decision is how this feels during ordinary use; richer specimen curation and direct cross-session jumps remain open.
+
 ## Richer explanation and replay
 
 - Implemented: local documentation-span selection through the optional explainshell backend, with source/extractor labels, unknown coverage and stable selection. Manual platform/version matching to the actual execution host remains open.

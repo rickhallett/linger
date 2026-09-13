@@ -10,12 +10,15 @@ use std::{
 pub enum Request {
     Index(Vec<Occurrence>),
     Set(String, Learning),
+    Note(String, String),
     Refresh,
 }
 pub enum Reply {
     Loaded(Vec<Aggregate>, BTreeMap<String, Learning>),
     Indexed(Vec<Aggregate>),
     Saved(Result<(), String>),
+    Notes(BTreeMap<String, String>),
+    NoteSaved(Result<(), String>),
     Error(String),
 }
 pub struct Store {
@@ -59,7 +62,7 @@ impl Store {
                 .map_err(db_error)?;
         }
         index.execute_batch("CREATE TABLE IF NOT EXISTS occurrences(session TEXT NOT NULL, agent TEXT NOT NULL, call TEXT NOT NULL, ordering TEXT NOT NULL, pattern TEXT NOT NULL, label TEXT NOT NULL, command TEXT NOT NULL, tool TEXT NOT NULL, PRIMARY KEY(session,agent,call)); CREATE INDEX IF NOT EXISTS occurrence_pattern ON occurrences(pattern,session); PRAGMA user_version=1;").map_err(db_error)?;
-        learning.execute_batch("CREATE TABLE IF NOT EXISTS learning(pattern TEXT PRIMARY KEY, state TEXT NOT NULL); PRAGMA user_version=1;").map_err(db_error)?;
+        learning.execute_batch("CREATE TABLE IF NOT EXISTS learning(pattern TEXT PRIMARY KEY, state TEXT NOT NULL); CREATE TABLE IF NOT EXISTS notes(pattern TEXT PRIMARY KEY, text TEXT NOT NULL); PRAGMA user_version=1;").map_err(db_error)?;
         Ok(Self { index, learning })
     }
     pub fn index(&mut self, rows: &[Occurrence]) -> Result<(), String> {
@@ -85,7 +88,7 @@ impl Store {
     }
     pub fn aggregates(&self) -> Result<Vec<Aggregate>, String> {
         let mut grouped = BTreeMap::<String, Aggregate>::new();
-        let mut query=self.index.prepare("SELECT pattern,MIN(label),MIN(command),MIN(tool),session,COUNT(*) FROM occurrences GROUP BY pattern,session ORDER BY pattern,session").map_err(db_error)?;
+        let mut query=self.index.prepare("SELECT pattern,MIN(label),MIN(command),MIN(tool),session,COUNT(*),MIN(ordering) FROM occurrences GROUP BY pattern,session ORDER BY pattern,session").map_err(db_error)?;
         let values = query
             .query_map([], |r| {
                 Ok((
@@ -95,11 +98,12 @@ impl Store {
                     r.get::<_, String>(3)?,
                     r.get::<_, String>(4)?,
                     r.get::<_, i64>(5)? as usize,
+                    r.get::<_, String>(6)?,
                 ))
             })
             .map_err(db_error)?;
         for v in values {
-            let (key, label, example, tool, session, count) = v.map_err(db_error)?;
+            let (key, label, example, tool, session, count, ordering) = v.map_err(db_error)?;
             let pattern = super::Pattern {
                 key,
                 label,
@@ -110,17 +114,24 @@ impl Store {
                 *grouped
                     .entry(p.key.clone())
                     .or_insert(Aggregate {
-                        key: p.key,
+                        key: p.key.clone(),
                         label: p.label,
                         example: example.clone(),
                         tool: tool.clone(),
                         sessions: Default::default(),
                         level: p.level,
                         inline: p.inline,
+                        first_seen: super::recorded_time(&ordering),
                     })
                     .sessions
                     .entry(session.clone())
                     .or_default() += count;
+                if let Some(first) = super::recorded_time(&ordering) {
+                    let a = grouped.get_mut(&p.key).unwrap();
+                    if a.first_seen.as_ref().is_none_or(|old| first < *old) {
+                        a.first_seen = Some(first);
+                    }
+                }
             }
         }
         Ok(grouped.into_values().collect())
@@ -128,6 +139,20 @@ impl Store {
     pub fn set(&self, key: &str, state: Learning) -> Result<(), String> {
         self.learning.execute("INSERT INTO learning(pattern,state) VALUES (?1,?2) ON CONFLICT(pattern) DO UPDATE SET state=excluded.state",params![key,serde_json::to_string(&state).unwrap()]).map_err(db_error)?;
         Ok(())
+    }
+    pub fn note(&self, key: &str, text: &str) -> Result<(), String> {
+        self.learning.execute("INSERT INTO notes(pattern,text) VALUES (?1,?2) ON CONFLICT(pattern) DO UPDATE SET text=excluded.text", params![key, text]).map_err(db_error)?;
+        Ok(())
+    }
+    pub fn notes(&self) -> Result<BTreeMap<String, String>, String> {
+        let mut query = self
+            .learning
+            .prepare("SELECT pattern,text FROM notes")
+            .map_err(db_error)?;
+        let rows = query
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+            .map_err(db_error)?;
+        rows.collect::<Result<_, _>>().map_err(db_error)
     }
     pub fn states(&self) -> Result<BTreeMap<String, Learning>, String> {
         let mut result = BTreeMap::new();
@@ -189,6 +214,14 @@ pub fn worker() -> (
                 return;
             }
         }
+        match store.notes() {
+            Ok(notes) => {
+                let _ = reply_tx.send(Reply::Notes(notes));
+            }
+            Err(error) => {
+                let _ = reply_tx.send(Reply::NoteSaved(Err(error)));
+            }
+        }
         while let Some(request) = rx.blocking_recv() {
             let reply = match request {
                 Request::Index(rows) => {
@@ -197,6 +230,7 @@ pub fn worker() -> (
                         Err(e) => Reply::Error(e),
                     }
                 }
+                Request::Note(key, text) => Reply::NoteSaved(store.note(&key, &text)),
                 Request::Set(key, state) => Reply::Saved(store.set(&key, state)),
                 Request::Refresh => match store.aggregates() {
                     Ok(a) => Reply::Indexed(a),

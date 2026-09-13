@@ -150,6 +150,7 @@ struct Snapshot {
 /// rather than an interface to build on, and carry no stability promise.
 pub struct App {
     pub library: crate::patterns::Library,
+    pub guide: crate::guide::Guide,
     pub explorer: crate::exploration::Explorer,
     pub inspector: Option<crate::inspector::Inspector>,
     pub interpretation_revision: u64,
@@ -241,6 +242,7 @@ impl App {
     pub fn new(session_id: String, mode: Mode) -> Self {
         App {
             library: Default::default(),
+            guide: Default::default(),
             explorer: Default::default(),
             inspector: None,
             interpretation_revision: 0,
@@ -490,6 +492,7 @@ impl App {
                 self.current_session_id = session_id.clone();
                 self.session = SessionModel::new(session_id);
                 self.inspector = None;
+                self.guide.open = false;
                 self.flow = graph::new_flow();
                 // A different session (or a truncated one) shares nothing with
                 // the rungs we hold, and a fresh `Timeline` restarts the

@@ -68,6 +68,7 @@ pub struct Aggregate {
     pub sessions: BTreeMap<String, usize>,
     pub level: Level,
     pub inline: bool,
+    pub first_seen: Option<String>,
 }
 #[derive(Clone)]
 pub struct Row {
@@ -80,6 +81,7 @@ pub struct Row {
     pub spread: usize,
     pub level: Level,
     pub inline: bool,
+    pub first_seen: Option<String>,
 }
 #[derive(Default)]
 pub struct View {
@@ -262,19 +264,7 @@ impl Library {
         self.revision += 1;
         self.notice = Some("Saving learning state…".into());
     }
-    pub fn refresh_view(&mut self) {
-        let Some(view) = &self.view else { return };
-        let stamp = (
-            self.revision,
-            view.all,
-            view.show_learned,
-            view.show_scripts,
-            view.level,
-            view.query.clone(),
-        );
-        if view.stamp.as_ref() == Some(&stamp) {
-            return;
-        }
+    pub fn all_rows(&self) -> Vec<Row> {
         let mut aggregates: BTreeMap<String, Aggregate> = self
             .cached
             .iter()
@@ -295,29 +285,25 @@ impl Library {
                         sessions: Default::default(),
                         level: p.level,
                         inline: p.inline,
+                        first_seen: recorded_time(&o.order),
                     });
+                if let Some(first) = recorded_time(&o.order) {
+                    let a = aggregates.get_mut(&p.key).unwrap();
+                    if a.first_seen.as_ref().is_none_or(|old| first < *old) {
+                        a.first_seen = Some(first);
+                    }
+                }
             }
         }
-        let query = view.query.to_lowercase();
-        let mut rows: Vec<_> = aggregates
+        aggregates
             .into_values()
-            .filter_map(|mut a| {
+            .map(|mut a| {
                 let n = here.get(&a.key).copied().unwrap_or(0);
-                if a.level != view.level
-                    || (a.inline && !view.show_scripts && query.is_empty())
-                    || (!view.all && n == 0)
-                    || (!view.show_learned && self.learning(&a.key) == Learning::Learned)
-                    || !format!("{} {}", a.label, a.example)
-                        .to_lowercase()
-                        .contains(&query)
-                {
-                    return None;
-                }
                 if n > 0 {
                     let cached = a.sessions.entry(self.session.clone()).or_default();
                     *cached = (*cached).max(n);
                 }
-                Some(Row {
+                Row {
                     key: a.key,
                     label: a.label,
                     example: a.example,
@@ -327,7 +313,36 @@ impl Library {
                     spread: a.sessions.len(),
                     level: a.level,
                     inline: a.inline,
-                })
+                    first_seen: a.first_seen,
+                }
+            })
+            .collect()
+    }
+    pub fn refresh_view(&mut self) {
+        let Some(view) = &self.view else { return };
+        let stamp = (
+            self.revision,
+            view.all,
+            view.show_learned,
+            view.show_scripts,
+            view.level,
+            view.query.clone(),
+        );
+        if view.stamp.as_ref() == Some(&stamp) {
+            return;
+        }
+        let query = view.query.to_lowercase();
+        let mut rows: Vec<_> = self
+            .all_rows()
+            .into_iter()
+            .filter(|a| {
+                a.level == view.level
+                    && (!a.inline || view.show_scripts || !query.is_empty())
+                    && (view.all || a.here > 0)
+                    && (view.show_learned || self.learning(&a.key) != Learning::Learned)
+                    && format!("{} {}", a.label, a.example)
+                        .to_lowercase()
+                        .contains(&query)
             })
             .collect();
         rows.sort_by(|a, b| {
@@ -469,3 +484,9 @@ impl App {
 
 #[cfg(all(test, feature = "native"))]
 mod tests;
+
+pub(crate) fn recorded_time(order: &str) -> Option<String> {
+    chrono::DateTime::parse_from_rfc3339(order.lines().next()?)
+        .ok()
+        .map(|t| t.to_rfc3339())
+}

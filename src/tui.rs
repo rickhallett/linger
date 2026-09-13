@@ -102,6 +102,19 @@ pub async fn run(
                         }
                     });
                 }
+                Reply::Notes(notes) => {
+                    for (key, note) in notes {
+                        app.guide.notes.entry(key).or_insert(note);
+                    }
+                }
+                Reply::NoteSaved(result) => {
+                    app.guide.notice = Some(match result {
+                        Ok(()) => "Field note saved".into(),
+                        Err(error) => {
+                            format!("{error} Note is session-only; press n to save again.")
+                        }
+                    });
+                }
                 Reply::Error(error) => {
                     app.library.storage_error = Some(error.clone());
                     app.library.notice = Some(error);
@@ -216,7 +229,8 @@ pub async fn run(
     // A shutdown write failure must be visible after the alternate screen closes.
     while let Ok(reply) = library_rx.try_recv() {
         if let crate::patterns::storage::Reply::Error(error)
-        | crate::patterns::storage::Reply::Saved(Err(error)) = reply
+        | crate::patterns::storage::Reply::Saved(Err(error))
+        | crate::patterns::storage::Reply::NoteSaved(Err(error)) = reply
         {
             eprintln!("{error}");
         }
@@ -274,6 +288,11 @@ fn flush_library(
     tx: &tokio::sync::mpsc::UnboundedSender<crate::patterns::storage::Request>,
 ) {
     use crate::patterns::storage::Request;
+    for (key, note) in std::mem::take(&mut app.guide.pending_notes) {
+        if tx.send(Request::Note(key, note)).is_err() {
+            app.guide.notice = Some("Note is session-only: local storage is unavailable.".into());
+        }
+    }
     if app.library.refresh_requested {
         app.library.refresh_requested = false;
         for o in app.library.current.values() {

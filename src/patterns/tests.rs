@@ -394,6 +394,29 @@ mod persistence {
         );
     }
     #[test]
+    fn field_notes_survive_restart_and_cache_rebuild() {
+        let dir = Scratch::new();
+        let store = Store::open(&dir.0).unwrap();
+        store
+            .note("program:rg", "-n adds line numbers; café")
+            .unwrap();
+        store.set("program:rg", Learning::Practising).unwrap();
+        drop(store);
+        let store = Store::open(&dir.0).unwrap();
+        assert_eq!(
+            store.notes().unwrap()["program:rg"],
+            "-n adds line numbers; café"
+        );
+        drop(store);
+        std::fs::remove_file(dir.0.join("patterns.sqlite3")).unwrap();
+        let store = Store::open(&dir.0).unwrap();
+        assert_eq!(
+            store.notes().unwrap()["program:rg"],
+            "-n adds line numbers; café"
+        );
+        assert_eq!(store.states().unwrap()["program:rg"], Learning::Practising);
+    }
+    #[test]
     fn independent_connections_do_not_overwrite_other_learning_choices() {
         let dir = Scratch::new();
         let a = Store::open(&dir.0).unwrap();

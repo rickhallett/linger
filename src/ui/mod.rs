@@ -11,6 +11,7 @@
 // are fields of `App`.
 pub(crate) mod chips;
 pub(crate) mod edges;
+mod guide;
 pub(crate) mod inspector;
 pub(crate) mod library;
 pub(crate) mod nodes;
@@ -61,7 +62,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     // playhead is drawn over.
     app.scrubber_area = None;
 
-    if app.library.view.is_some() {
+    if app.guide.open {
+        guide::render(frame, canvas_area, app);
+    } else if app.library.view.is_some() {
         library::render(frame, canvas_area, app);
     } else if app.inspector.is_some() {
         inspector::render(frame, canvas_area, app);
@@ -634,7 +637,7 @@ fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette) {
         ]),
         Line::from(vec![
             Span::styled(" layout    ", key),
-            Span::styled("r rearrange the graph", txt),
+            Span::styled("r rearrange · b patterns · G field guide", txt),
         ]),
         Line::from(vec![
             Span::styled(" navigate  ", key),
@@ -821,7 +824,7 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
     } else {
         "q quit · "
     };
-    let hints = format!("b patterns · {quit}? help");
+    let hints = format!("G guide · b patterns · {quit}? help");
 
     // Reserve the hint area in terminal CELLS, not bytes: the hints contain
     // multibyte glyphs (`·` is 2 bytes, the arrows 3 each), so `str::len()`

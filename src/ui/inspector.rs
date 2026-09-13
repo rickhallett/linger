@@ -40,7 +40,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 Span::styled(format!("    {} events ahead", buffered), muted),
             ]),
             Line::styled(
-                " Enter drill in · Esc back · space pause · b patterns · p Practising",
+                " Enter drill in · Esc back · G guide · b patterns · p Practising",
                 muted,
             ),
         ])

@@ -51,4 +51,5 @@ pub mod inspector;
 #[cfg(feature = "native")]
 pub mod interpretation;
 
+pub mod guide;
 pub mod patterns;
