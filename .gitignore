@@ -20,3 +20,7 @@ tmp-*.gif
 
 # Python checks import the shared terminal fixture.
 /scripts/__pycache__/
+
+# Deployment state and local terminal exports
+.vercel/
+/dsh-tui-export-*.md

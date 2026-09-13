@@ -1,18 +1,19 @@
 {
-  "name": "zoetrope-web",
+  "name": "linger-web",
   "type": "module",
   "private": true,
   "version": "0.1.0",
-  "description": "Website + in-browser app for zoetrope — the Claude Code session visualizer.",
+  "description": "Linger terminal inspector website",
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
+    "dev": "astro dev --config astro.linger.config.mjs",
+    "start": "astro dev --config astro.linger.config.mjs",
     "build:wasm": "bash scripts/build-wasm.sh",
-    "build": "npm run build:wasm && astro build",
-    "build:site": "astro build",
-    "preview": "astro preview",
+    "build": "astro build --config astro.linger.config.mjs",
+    "build:site": "astro build --config astro.linger.config.mjs",
+    "preview": "astro preview --config astro.linger.config.mjs",
     "astro": "astro",
-    "og": "node scripts/og.mjs"
+    "og": "node scripts/og.mjs",
+    "build:upstream": "npm run build:wasm && astro build"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",
@@ -20,15 +21,13 @@
     "@vercel/analytics": "^2.0.1",
     "astro": "^7.2.2"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "sharp",
-      "esbuild"
-    ]
-  },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "satori": "^0.29.0",
     "sharp": "^0.35.3"
+  },
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24 <25"
   }
 }

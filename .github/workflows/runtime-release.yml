@@ -1,0 +1,112 @@
+name: Runtime release
+on:
+  push:
+    tags: ['runtime-v*']
+permissions:
+  contents: read
+concurrency:
+  group: runtime-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/release-version.py runtime "$RELEASE_TAG"
+  checks:
+    uses: ./.github/workflows/ci.yml
+  macos:
+    needs: [version, checks]
+    strategy:
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    environment: runtime-preview
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c
+      - name: Build and smoke test
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          cargo build --release --locked --target "$TARGET"
+          "target/$TARGET/release/linger" --version
+          "target/$TARGET/release/linger" inspect examples/repair.jsonl
+      - name: Package binary and license
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p dist/package/docs
+          cp "target/$TARGET/release/linger" dist/package/
+          cp LICENSE README.md dist/package/
+          cp -R examples dist/package/
+          cp -R docs/licenses dist/package/docs/
+          tar -czf "dist/linger-$VERSION-$TARGET.tar.gz" -C dist/package .
+          cd dist
+          shasum -a 256 "linger-$VERSION-$TARGET.tar.gz" > "linger-$VERSION-$TARGET.tar.gz.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: macos-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+  publish:
+    needs: [version, macos]
+    if: needs.version.outputs.prerelease == 'false'
+    runs-on: ubuntu-24.04
+    environment: runtime-production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c
+      - run: cargo publish --dry-run --locked
+      - name: Obtain short-lived publishing credential
+        id: auth
+        if: vars.CARGO_TRUSTED_PUBLISHING == 'true'
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: Publish crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
+  release:
+    needs: [version, macos, publish]
+    if: always() && needs.macos.result == 'success' && (needs.publish.result == 'success' || needs.version.outputs.prerelease == 'true')
+    runs-on: ubuntu-24.04
+    environment: ${{ needs.version.outputs.prerelease == 'true' && 'runtime-preview' || 'runtime-production' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: macos-*
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          flags=(--latest)
+          if [ "$PRERELEASE" = true ]; then flags=(--prerelease --latest=false); fi
+          gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.sha256 --verify-tag --title "Linger $VERSION" --notes-file docs/releases/runtime.md "${flags[@]}"

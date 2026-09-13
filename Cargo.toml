@@ -21,7 +21,9 @@ rust-version = "1.88"
 description = "Inspect, replay and understand coding-agent tool calls in your terminal."
 license = "MIT"
 readme = "README.md"
-publish = false
+repository = "https://github.com/rickhallett/linger"
+homepage = "https://lingerer.xyz"
+publish = ["crates-io"]
 
 keywords = ["claude-code", "codex", "tui", "agents", "visualization"]
 categories = ["command-line-utilities", "development-tools", "visualization"]
@@ -29,10 +31,11 @@ categories = ["command-line-utilities", "development-tools", "visualization"]
 # stays out by default. The inverse leaks — anything added to the repo later
 # (recordings, web fonts, an OG image) silently ends up in the tarball until
 # someone audits it. Nothing here is compiled in: `assets/` belongs to the site
-# and the browser frontend (which is what `include_str!`s the demo fixture), and
+# and the inherited browser frontend. Keep fictional examples and attribution.
+# Exclude
 # the GIFs and tapes are ~5MB of recordings this crate never reads.
 # Cargo adds Cargo.toml and Cargo.lock on its own.
-include = ["/src/**/*.rs", "/src/**/*.py", "/README.md", "/LICENSE"]
+include = ["/src/**/*.rs", "/src/**/*.py", "/README.md", "/LICENSE", "/docs/licenses/*", "/examples/*.jsonl", "/benches/**/*.rs", "/scripts/setup-explainshell.py", "/docs/COMMAND-EXPLORER.md"]
 
 [features]
 default = ["native"]
@@ -109,7 +112,7 @@ chrono = { version = "0.4", features = ["wasmbind"] }
 name = "zoetrope"
 
 [[bin]]
-# The crate is `zoetrope`; the command you type is `zoe`.
+# The inherited library name stays zoetrope; the installed command is linger.
 name = "linger"
 path = "src/main.rs"
 # Native terminal binary — skipped by a `--no-default-features` build.

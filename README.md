@@ -1,17 +1,19 @@
 # Linger
 
-Watch your agents work. Stay with what matters.
+The agent ran it. Now make sense of it.
 
 Linger is an open-source terminal viewer for Claude Code and Codex sessions. Follow a run live, move back through time, and drill into the exact inputs and recorded outputs of individual tool calls. Explore command parts against local documentation or ask Mercury to interpret the selected evidence.
 
-Early local build: live/replay inspection, optional local explainshell exploration, a session and cross-session pattern library, persistent learning states with Practising highlights, and a growing command field guide.
+Linger 0.1.0: live/replay inspection, optional local explainshell exploration, a session and cross-session pattern library, persistent learning states with Practising highlights, and a growing command field guide.
 
 ## Run
 
-Requires Rust 1.88 or newer (build with the committed lockfile).
+Install with Rust 1.88 or newer, or download an Apple Silicon or Intel macOS binary from [GitHub Releases](https://github.com/rickhallett/linger/releases/latest). The binaries are not Apple Developer ID signed or notarized. Linux binary distribution is still to be decided.
+
+[Website and guide](https://lingerer.xyz) · [Release process](docs/RELEASING.md)
 
 ```sh
-cargo install --path . --locked
+cargo install linger --version 0.1.0 --locked
 linger                         # newest session for the current project
 linger /path/to/project        # follow another project
 linger /path/to/session.jsonl  # replay a recording

@@ -1,0 +1,88 @@
+name: Website
+on:
+  pull_request:
+    paths: ['web/**', 'examples/repair.jsonl', 'vercel.json', '.vercelignore', '.github/workflows/website.yml']
+  push:
+    branches: [main]
+    tags: ['website-v*']
+    paths: ['web/**', 'examples/repair.jsonl', 'vercel.json', '.vercelignore', '.github/workflows/website.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm --dir web install --frozen-lockfile
+      - run: pnpm --dir web run build
+      - name: Validate production tag
+        if: startsWith(github.ref, 'refs/tags/website-v')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/release-version.py website "$RELEASE_TAG"
+      - name: Verify canonical routes
+        run: |
+          test -s web/dist/index.html
+          test -s web/dist/guide/index.html
+          test ! -d web/dist/variants
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ startsWith(github.ref, 'refs/tags/website-v') && 'website-production' || 'website-preview' }}
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      PRODUCTION: ${{ startsWith(github.ref, 'refs/tags/website-v') }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: npm install --global vercel@59.11.7
+      - name: Configure CLI authentication
+        run: |
+          mkdir -p "$RUNNER_TEMP/vercel-auth"
+          node -e 'require("fs").writeFileSync(process.env.RUNNER_TEMP + "/vercel-auth/auth.json", JSON.stringify({token: process.env.VERCEL_TOKEN}), {mode: 0o600})'
+      - name: Build and deploy selected environment
+        id: deploy
+        shell: bash
+        run: |
+          environment=preview
+          flags=()
+          if [ "$PRODUCTION" = true ]; then environment=production; flags=(--prod); fi
+          vercel pull --yes --environment="$environment" --global-config="$RUNNER_TEMP/vercel-auth"
+          vercel build "${flags[@]}" --global-config="$RUNNER_TEMP/vercel-auth"
+          url=$(vercel deploy --prebuilt "${flags[@]}" --global-config="$RUNNER_TEMP/vercel-auth" --yes)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployment: $url" >> "$GITHUB_STEP_SUMMARY"
+          vercel inspect "$url" --global-config="$RUNNER_TEMP/vercel-auth"
+      - name: Record website release
+        if: startsWith(github.ref, 'refs/tags/website-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          printf 'Canonical Osaka Jade website.\n\nProduction: https://lingerer.xyz\n\nDeployment: %s\n' "$DEPLOYMENT_URL" > website-release.md
+          gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --notes-file website-release.md --latest=false

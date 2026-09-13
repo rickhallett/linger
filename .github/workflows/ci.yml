@@ -1,22 +1,36 @@
-name: Linger native checks
+name: Runtime checks
 on:
   push:
+    branches: [main]
+    paths: ['src/**', 'Cargo.*', 'examples/**', 'benches/**', 'scripts/**', '.github/workflows/ci.yml']
   pull_request:
+    paths: ['src/**', 'Cargo.*', 'examples/**', 'benches/**', 'scripts/**', '.github/workflows/ci.yml']
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
   native:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
       - run: cargo fmt --check
       - run: cargo test --locked
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo build --release --locked
       - run: target/release/linger --version
       - run: target/release/linger inspect examples/repair.jsonl
+  msrv:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - run: rustup toolchain install 1.88.0 --profile minimal
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c
+      - run: cargo +1.88.0 check --locked --bin linger
