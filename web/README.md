@@ -25,3 +25,7 @@ All earlier variants, their index, extra styles, tour assets, capture scripts an
 This archive is not canonical, is not included in builds, and is not tracked or backed up by Git. It contains a README and a hash manifest. Consult it only when explicitly revisiting an older design; do not use it as guidance for routine website changes. There are no live `/variants/` routes or gallery links.
 
 The inherited Zoetrope `src/`, `public/`, `wasm/` and `astro.config.mjs` remain upstream material and are excluded from the active site build. `build:upstream` is retained for upstream development only. Preserve upstream MIT attribution.
+
+## Background studies
+
+Opt-in preview query parameters `?background=phosphor`, `?background=fold` and `?background=etching` show image-generated art from `linger/public/backgrounds/`. They fade in once over 1.8 seconds at 12%, 10% and 9% opacity respectively. Reduced-motion preference removes the transition. The default page stays plain; these studies are awaiting selection. Original PNGs and full built-in image-generation prompts are retained locally in the root checkout at `outputs/background-studies-2026-09-13/`.

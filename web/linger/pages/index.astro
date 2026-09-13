@@ -14,6 +14,7 @@ const install = 'cargo install --git https://github.com/rickhallett/linger --tag
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 </head>
 <body>
+<div class="background-study" aria-hidden="true"></div>
 <a class="skip" href="#main">Skip to content</a>
 <header class="shell nav">
   <a class="wordmark" href="/" aria-label="Linger home">[ linger ]</a>
@@ -71,6 +72,20 @@ const install = 'cargo install --git https://github.com/rickhallett/linger --tag
 </main>
 <footer class="shell footer"><p>Built on <a href="https://github.com/furkankly/zoetrope">Zoetrope</a>, by Furkan Kalaycioglu.<br />Linger is independent, open-source software.</p><a href={`${repo}/blob/main/LICENSE`}>MIT licence</a></footer>
 <script>
+  // Background studies are opt-in preview URLs; the plain page remains the default.
+  const background = new URLSearchParams(location.search).get('background');
+  const studies: Record<string, number> = {phosphor: 0.12, fold: 0.10, etching: 0.09};
+  if (background && Object.hasOwn(studies, background)) {
+    const layer = document.querySelector<HTMLElement>('.background-study')!;
+    const art = new Image();
+    art.alt = '';
+    art.addEventListener('load', () => {
+      layer.style.setProperty('--art-opacity', String(studies[background]));
+      layer.append(art);
+      requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('visible')));
+    });
+    art.src = `/backgrounds/${background}.png`;
+  }
   let view = 'command';
   let part = 1;
   const image = document.querySelector<HTMLImageElement>('#terminal-frame')!;
