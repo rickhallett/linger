@@ -82,6 +82,7 @@ impl Stream {
                 f.ts = ts;
             }
         }
+        facts.sort_by_key(|f| matches!(f.kind, FactKind::ToolEvidence { .. }));
         Some(Statement { at: ts, facts })
     }
 
@@ -186,14 +187,32 @@ impl Stream {
                                 name: name.clone(),
                                 summary,
                             }));
+                            if let Some(input) = &fc.arguments {
+                                out.push(by(FactKind::ToolEvidence {
+                                    call: call.clone(),
+                                    output: false,
+                                    text: input.clone().into(),
+                                }));
+                            }
                             if is_spawn_tool(&name) {
                                 out.push(by(FactKind::Spawn { call: call.clone() }));
                             }
                         }
                     }
-                    ResponseItem::FunctionCallOutput { call_id, .. } => {
+                    ResponseItem::FunctionCallOutput { call_id, output } => {
                         // The format records no error flag on these outputs.
                         if let Some(call) = call_id {
+                            if let Some(value) = output {
+                                let text =
+                                    value.as_str().map(str::to_string).unwrap_or_else(|| {
+                                        serde_json::to_string_pretty(value).unwrap_or_default()
+                                    });
+                                out.push(by(FactKind::ToolEvidence {
+                                    call: call.clone(),
+                                    output: true,
+                                    text: text.into(),
+                                }));
+                            }
                             out.push(by(FactKind::ToolEnd {
                                 call: call.clone(),
                                 outcome: Outcome::Ok,
@@ -203,6 +222,13 @@ impl Stream {
                     ResponseItem::CustomToolCall(tc) => {
                         if let Some(call) = &tc.call_id {
                             let name = tc.name.clone().unwrap_or_default();
+                            if let Some(input) = &tc.input {
+                                out.push(by(FactKind::ToolEvidence {
+                                    call: call.clone(),
+                                    output: false,
+                                    text: input.clone().into(),
+                                }));
+                            }
                             let summary = tc.input.as_deref().map(summarize_program);
                             out.push(by(FactKind::ToolStart {
                                 call: call.clone(),
@@ -213,6 +239,13 @@ impl Stream {
                     }
                     ResponseItem::CustomToolCallOutput { call_id, output } => {
                         if let Some(call) = call_id {
+                            if let Some(text) = output.recorded() {
+                                out.push(by(FactKind::ToolEvidence {
+                                    call: call.clone(),
+                                    output: true,
+                                    text: text.into(),
+                                }));
+                            }
                             // `exec` writes its verdict on the first line:
                             // `Script completed`, `Script failed`, or a host
                             // error. Anything but the first is a failure.
@@ -297,6 +330,30 @@ impl Stream {
     fn item_facts(&self, owner: &str, ic: &wire::ItemCompleted, out: &mut Vec<Fact>) {
         let started = ic.started_at();
         let completed = ic.completed_at();
+        if let Item::CommandExecution(c) = &ic.item
+            && let Some(call) = &c.id
+        {
+            let input = serde_json::json!({"command": c.command, "cwd": c.cwd});
+            out.push(Fact {
+                agent: Some(owner.to_string()),
+                ts: started,
+                kind: FactKind::ToolEvidence {
+                    call: call.clone(),
+                    output: false,
+                    text: input.to_string().into(),
+                },
+            });
+            let result = serde_json::json!({"aggregated_output": c.aggregated_output, "stdout": c.stdout, "stderr": c.stderr, "exit_code": c.exit_code, "status": c.status});
+            out.push(Fact {
+                agent: Some(owner.to_string()),
+                ts: completed.or(started),
+                kind: FactKind::ToolEvidence {
+                    call: call.clone(),
+                    output: true,
+                    text: serde_json::to_string_pretty(&result).unwrap().into(),
+                },
+            });
+        }
         let mut ran = |call: &Option<String>, name: String, summary: Option<String>, outcome| {
             let Some(call) = call else { return };
             out.push(Fact {
@@ -451,6 +508,13 @@ fn command_kind_name(kind: &str) -> &str {
 /// One line for a collaboration or built-in function call.
 fn summarize_function(name: &str, fc: &wire::FunctionCall) -> Option<String> {
     match name {
+        "exec_command" | "shell_command" | "functions.exec_command" | "functions.shell_command" => {
+            fc.argument("cmd").or_else(|| fc.argument("command"))
+        }
+        "write_stdin" | "functions.write_stdin" => fc
+            .argument("chars")
+            .filter(|s| !s.is_empty())
+            .or_else(|| Some("poll process output".into())),
         "spawn_agent" => fc.argument("task_name"),
         "send_message" => fc.argument("recipient").or_else(|| fc.argument("message")),
         _ => None,

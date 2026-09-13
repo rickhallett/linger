@@ -11,6 +11,7 @@
 // are fields of `App`.
 pub(crate) mod chips;
 pub(crate) mod edges;
+pub(crate) mod inspector;
 pub(crate) mod nodes;
 pub(crate) mod panel;
 
@@ -58,36 +59,40 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     // playhead is drawn over.
     app.scrubber_area = None;
 
-    // Copy the selected agent id out *before* borrowing the flow mutably for
-    // the canvas render (borrow split: companions take &Flow, Widget is &mut).
-    let selected = app.selected_agent_id();
-
-    // When an agent is selected, split the canvas 30/70 for the detail panel —
-    // the panel is what you're reading; the canvas only keeps the selected
-    // node (click-centered) in view for orientation.
-    let (flow_area, panel_area) = if selected.is_some() {
-        let [left, right] =
-            Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
-                .areas(canvas_area);
-        (left, Some(right))
+    if app.inspector.is_some() {
+        inspector::render(frame, canvas_area, app);
     } else {
-        (canvas_area, None)
-    };
+        // Copy the selected agent id out *before* borrowing the flow mutably for
+        // the canvas render (borrow split: companions take &Flow, Widget is &mut).
+        let selected = app.selected_agent_id();
 
-    render_canvas(frame, flow_area, app, selected.is_none());
+        // When an agent is selected, split the canvas 30/70 for the detail panel —
+        // the panel is what you're reading; the canvas only keeps the selected
+        // node (click-centered) in view for orientation.
+        let (flow_area, panel_area) = if selected.is_some() {
+            let [left, right] =
+                Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)])
+                    .areas(canvas_area);
+            (left, Some(right))
+        } else {
+            (canvas_area, None)
+        };
 
-    // A user selection centers its node — resolved HERE, after the flow has
-    // rendered into the (possibly just-narrowed) canvas, because `center_on`
-    // probes against the last-rendered viewport size. Centering at event time
-    // would target the pre-split width and land the node off-center.
-    if let Some(id) = app.pending_center.take() {
-        // Manual spatial-nav: pan to the node but DON'T snap the zoom (that's a
-        // Follow concern) — an arrow press shouldn't yank the user's zoom.
-        app.center_node(&id, false);
-    }
+        render_canvas(frame, flow_area, app, selected.is_none());
 
-    if let (Some(panel_area), Some(id)) = (panel_area, selected.as_ref()) {
-        panel::render(frame, panel_area, app, id);
+        // A user selection centers its node — resolved HERE, after the flow has
+        // rendered into the (possibly just-narrowed) canvas, because `center_on`
+        // probes against the last-rendered viewport size. Centering at event time
+        // would target the pre-split width and land the node off-center.
+        if let Some(id) = app.pending_center.take() {
+            // Manual spatial-nav: pan to the node but DON'T snap the zoom (that's a
+            // Follow concern) — an arrow press shouldn't yank the user's zoom.
+            app.center_node(&id, false);
+        }
+
+        if let (Some(panel_area), Some(id)) = (panel_area, selected.as_ref()) {
+            panel::render(frame, panel_area, app, id);
+        }
     }
 
     if let Some(panel) = timeline_area {
@@ -566,7 +571,7 @@ fn render_log_line(frame: &mut Frame, row: Rect, app: &App) {
 /// Centered help overlay: full key reference + status-glyph legend.
 fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette) {
     let w = area.width.min(60);
-    let h = area.height.min(18);
+    let h = area.height.min(20);
     if w < 24 || h < 9 {
         return;
     }
@@ -593,6 +598,14 @@ fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette) {
 
     let lines = vec![
         Line::from(""),
+        Line::from(vec![
+            Span::styled(" inspect   ", key),
+            Span::styled("Enter calls · Enter detail · Esc back", txt),
+        ]),
+        Line::from(vec![
+            Span::styled(" evidence  ", key),
+            Span::styled("1–4 tabs · i Mercury · ,/. step event", txt),
+        ]),
         Line::from(vec![
             Span::styled(" camera    ", key),
             Span::styled("o overview · f follow · pan/zoom = manual", txt),
@@ -658,7 +671,7 @@ fn render_help(frame: &mut Frame, area: Rect, palette: &rataflow::Palette) {
         .border_style(bg.fg(palette.accent))
         .style(bg)
         .title_top(
-            Line::from(" zoetrope — keys ")
+            Line::from(" Linger — keys ")
                 .centered()
                 .style(bg.fg(palette.text).add_modifier(Modifier::BOLD)),
         )
@@ -726,7 +739,7 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
     let mut left: Vec<Span> = vec![
         // Wordmark: the gold identity chip in every screenshot.
         Span::styled(
-            " zoetrope ",
+            " Linger ",
             Style::default()
                 .bg(palette.accent)
                 .fg(palette.canvas_bg)

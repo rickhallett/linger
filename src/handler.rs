@@ -21,6 +21,22 @@ pub fn handle_event(event: &Event, app: &mut App) -> bool {
     match event {
         Event::Key(key) => handle_key(key, app),
         Event::Mouse(mouse) => {
+            if app.inspector.is_some() {
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => {
+                        if let Some(i) = &mut app.inspector {
+                            i.scroll = i.scroll.saturating_add(3);
+                        }
+                    }
+                    MouseEventKind::ScrollUp => {
+                        if let Some(i) = &mut app.inspector {
+                            i.scroll = i.scroll.saturating_sub(3);
+                        }
+                    }
+                    _ => {}
+                }
+                return false;
+            }
             // A press/drag on the scrubber row seeks the playhead — intercept it
             // before the flow sees it (else it reads as a pane drag → pan).
             if let Some(bar) = app.scrubber_area
@@ -60,7 +76,26 @@ fn handle_key(key: &KeyEvent, app: &mut App) -> bool {
 
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
+    if ctrl && matches!(key.code, KeyCode::Char('c' | 'C')) {
+        return true;
+    }
+    if app.inspector.is_some() && inspector_key(key, app) {
+        return false;
+    }
+
     match key.code {
+        KeyCode::Enter => {
+            app.open_inspector();
+            return false;
+        }
+        KeyCode::Char(',') => {
+            app.step_event(false);
+            return false;
+        }
+        KeyCode::Char('.') => {
+            app.step_event(true);
+            return false;
+        }
         // Quit.
         KeyCode::Char('q') | KeyCode::Char('Q') => {
             app.should_quit = true;
@@ -247,6 +282,102 @@ pub fn process_flow_events(app: &mut App, events: impl Iterator<Item = rataflow:
     // The logic lives on `App` so the browser frontend shares it; this stays as
     // the native handler's call surface.
     app.process_flow_events(events);
+}
+
+/// Inspector keys are modal: typing a search must never trigger graph actions.
+fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
+    use crate::inspector::Tab;
+    let i = app.inspector.as_mut().unwrap();
+    if i.searching {
+        match key.code {
+            KeyCode::Esc => i.searching = false,
+            KeyCode::Enter => {
+                i.searching = false;
+                app.find_in_inspector(false);
+            }
+            KeyCode::Backspace => {
+                i.query.pop();
+            }
+            KeyCode::Char(c) => i.query.push(c),
+            _ => {}
+        }
+        return true;
+    }
+    match key.code {
+        KeyCode::Esc => {
+            if i.detail {
+                i.detail = false;
+            } else {
+                app.inspector = None;
+            }
+        }
+        KeyCode::Enter => i.detail = true,
+        KeyCode::Char('v') => {
+            i.raw = !i.raw;
+            i.scroll = 0;
+        }
+        KeyCode::Char('1') => {
+            i.tab = Tab::Input;
+            i.scroll = 0;
+        }
+        KeyCode::Char('2') => {
+            i.tab = Tab::Output;
+            i.scroll = 0;
+        }
+        KeyCode::Char('3' | 'e') => {
+            i.tab = Tab::Explain;
+            i.scroll = 0;
+        }
+        KeyCode::Char('4') => {
+            i.tab = Tab::Interpret;
+            i.scroll = 0;
+        }
+        KeyCode::Char('i') => app.request_interpretation(),
+        KeyCode::Char('R') => {
+            if let Some(r) = app.interpretation_request() {
+                app.interpretations.remove(&r.key);
+            }
+            app.request_interpretation();
+        }
+        KeyCode::Char('/') => {
+            i.searching = true;
+            i.query.clear();
+        }
+        KeyCode::Char('n') => app.find_in_inspector(true),
+        KeyCode::Char('j') | KeyCode::Down => {
+            if i.detail {
+                i.scroll = i
+                    .scroll
+                    .saturating_add(1)
+                    .min(i.lines.len().saturating_sub(1));
+            } else {
+                app.move_call(1);
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            if i.detail {
+                i.scroll = i.scroll.saturating_sub(1);
+            } else {
+                app.move_call(-1);
+            }
+        }
+        KeyCode::PageDown => {
+            i.scroll = i
+                .scroll
+                .saturating_add(15)
+                .min(i.lines.len().saturating_sub(1))
+        }
+        KeyCode::PageUp => i.scroll = i.scroll.saturating_sub(15),
+        KeyCode::Char('h') | KeyCode::Left => i.horizontal = i.horizontal.saturating_sub(4),
+        KeyCode::Char('l') | KeyCode::Right => i.horizontal = i.horizontal.saturating_add(4),
+        KeyCode::Tab | KeyCode::BackTab => i.detail = !i.detail,
+        KeyCode::Home => i.scroll = 0,
+        KeyCode::Char('q' | 'Q' | ',' | '.' | '[' | ']' | 'g' | 'G' | ' ') | KeyCode::End => {
+            return false;
+        }
+        _ => {}
+    }
+    true
 }
 
 #[cfg(test)]

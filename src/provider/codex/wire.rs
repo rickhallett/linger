@@ -286,7 +286,7 @@ pub struct CustomToolCall {
 #[serde(untagged)]
 pub enum Output {
     Text(String),
-    Parts(Vec<ContentPart>),
+    Parts(Vec<serde_json::Value>),
     Other(serde_json::Value),
 }
 
@@ -297,11 +297,25 @@ impl Default for Output {
 }
 
 impl Output {
+    pub fn recorded(&self) -> Option<String> {
+        match self {
+            Self::Text(s) => Some(s.clone()),
+            Self::Parts(p) => Some(serde_json::to_string_pretty(p).unwrap_or_default()),
+            Self::Other(v) if !v.is_null() => {
+                Some(serde_json::to_string_pretty(v).unwrap_or_default())
+            }
+            _ => None,
+        }
+    }
+
     /// The leading text, where the `exec` tool writes its verdict line.
     pub fn head(&self) -> Option<&str> {
         match self {
             Output::Text(s) => Some(s),
-            Output::Parts(parts) => parts.first().and_then(|p| p.text.as_deref()),
+            Output::Parts(parts) => parts
+                .first()
+                .and_then(|p| p.get("text"))
+                .and_then(|t| t.as_str()),
             Output::Other(_) => None,
         }
     }
@@ -415,6 +429,10 @@ pub enum Item {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct CommandExecution {
+    pub aggregated_output: Option<String>,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
+    pub cwd: Option<String>,
     pub id: Option<String>,
     #[serde(default)]
     pub command: Vec<String>,

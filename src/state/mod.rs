@@ -149,6 +149,11 @@ struct Snapshot {
 /// [`tui`](crate::tui) loop and the browser crate. They are frontend plumbing
 /// rather than an interface to build on, and carry no stability promise.
 pub struct App {
+    pub inspector: Option<crate::inspector::Inspector>,
+    pub interpretation_revision: u64,
+    pub pending_interpretations:
+        std::collections::VecDeque<crate::inspector::InterpretationRequest>,
+    pub interpretations: std::collections::HashMap<String, String>,
     /// The rendered flow graph (agent cards + step edges).
     pub flow: AgentFlow,
     /// The pure domain model the graph is projected from.
@@ -233,6 +238,10 @@ impl App {
     /// configured flow and a fresh model.
     pub fn new(session_id: String, mode: Mode) -> Self {
         App {
+            inspector: None,
+            interpretation_revision: 0,
+            pending_interpretations: Default::default(),
+            interpretations: Default::default(),
             flow: graph::new_flow(),
             session: SessionModel::new(session_id.clone()),
             mode,
@@ -289,6 +298,10 @@ impl App {
     /// Seek to a fraction (`0.0..=1.0`) along the timeline — a scrubber
     /// click/drag. Index-based (see `Timeline::progress`), so the playhead
     /// lands under the cursor and activity is evenly reachable. No-op when empty.
+    pub(crate) fn commit_inspector_seek(&mut self, target: usize) {
+        self.commit_seek(target);
+    }
+
     pub fn seek_to_fraction(&mut self, f: f64) {
         let len = self.timeline.items.len();
         if len == 0 {
@@ -467,6 +480,7 @@ impl App {
                 let genuine = !self.is_current(&session_id) || self.flow.nodes().count() > 0;
                 self.current_session_id = session_id.clone();
                 self.session = SessionModel::new(session_id);
+                self.inspector = None;
                 self.flow = graph::new_flow();
                 // A different session (or a truncated one) shares nothing with
                 // the rungs we hold, and a fresh `Timeline` restarts the

@@ -203,9 +203,8 @@ fn day_dir_floor(t: SystemTime) -> (u32, u32, u32) {
 
 /// What a rollout is, by its own first line.
 pub fn session_file(path: &Path) -> Option<SessionFile> {
-    if !is_rollout_file(path) {
-        return None;
-    }
+    // Discovery still filters rollout names; an explicitly opened/exported
+    // file is identified by its content, even after the user renames it.
     let meta = read_meta(path)?;
     from_meta(path, &meta, crate::provider::modified(path))
 }

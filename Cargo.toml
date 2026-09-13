@@ -12,18 +12,17 @@
 exclude = ["web/wasm"]
 
 [package]
-name = "zoetrope"
-version = "0.2.0"
+name = "linger"
+version = "0.1.0"
 edition = "2024"
 # Inherited from ratatui 0.30, which is the floor: nothing in this crate's own
 # source needs anything newer. Verified by the `msrv` job in CI.
 rust-version = "1.88"
-description = "Terminal UI that visualizes Claude Code and Codex agent sessions as a live flow graph."
+description = "Inspect, replay and understand coding-agent tool calls in your terminal."
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/furkankly/zoetrope"
-homepage = "https://zoetrope.furkankly.dev"
-documentation = "https://zoetrope.furkankly.dev"
+publish = false
+
 keywords = ["claude-code", "codex", "tui", "agents", "visualization"]
 categories = ["command-line-utilities", "development-tools", "visualization"]
 # An allow-list, not a deny-list: state what the crate ships and everything else
@@ -48,6 +47,7 @@ native = [
   "dep:crossterm",
   "dep:futures",
   "dep:anyhow",
+  "dep:reqwest",
   "ratatui/crossterm",
   "rataflow/crossterm",
 ]
@@ -97,9 +97,12 @@ imbl = "7.0.1"
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 chrono = { version = "0.4", features = ["wasmbind"] }
 
+[lib]
+name = "zoetrope"
+
 [[bin]]
 # The crate is `zoetrope`; the command you type is `zoe`.
-name = "zoe"
+name = "linger"
 path = "src/main.rs"
 # Native terminal binary — skipped by a `--no-default-features` build.
 required-features = ["native"]
@@ -116,3 +119,9 @@ harness = false
 [[bench]]
 name = "memory"
 harness = false
+
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+features = ["json", "rustls-tls"]
+optional = true

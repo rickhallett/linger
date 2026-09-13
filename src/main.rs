@@ -3,14 +3,14 @@
 //! CLI (hand-rolled over `std::env::args`, no clap):
 //!
 //! ```text
-//! zoe                       follow the current project's live session
-//! zoe <file.jsonl>          replay a recording, played from the start
-//! zoe <id>                  replay a session by id (or a unique prefix)
-//! zoe <dir>                 follow another project's live session
-//! zoe <file> --follow       follow a file's live edge instead of replaying
-//! zoe <file> --speed N      playback speed multiplier (default 8.0)
-//! zoe --provider <name> ... force the transcript format instead of detecting it
-//! zoe inspect <file|id|dir> headless: print the session tree + info
+//! linger                       follow the current project's live session
+//! linger <file.jsonl>          replay a recording, played from the start
+//! linger <id>                  replay a session by id (or a unique prefix)
+//! linger <dir>                 follow another project's live session
+//! linger <file> --follow       follow a file's live edge instead of replaying
+//! linger <file> --speed N      playback speed multiplier (default 8.0)
+//! linger --provider <name> ... force the transcript format instead of detecting it
+//! linger inspect <file|id|dir> headless: print the session tree + info
 //! ```
 
 use std::path::PathBuf;
@@ -57,18 +57,18 @@ pub enum Cli {
 const DEFAULT_REPLAY_SPEED: f64 = 8.0;
 
 const USAGE: &str = "\
-zoetrope — visualize coding-agent sessions as a flow graph
+Linger — inspect, replay and understand agent tool calls
 
 USAGE:
-    zoe                     follow the current project's live session
-    zoe <file.jsonl>        replay a recording, played from the start
-    zoe <id>                replay a session by id, or a unique prefix of one
-    zoe <dir>               follow another project's live session
-    zoe <file> --follow     follow a file's live edge instead of replaying
-    zoe <file> --speed N    playback speed (default 8.0)
-    zoe --provider <name>   force the format (claude, codex) instead of detecting it
-    zoe inspect <file|id>   headless: print the session tree + info
-    zoe --version           print the version and exit
+    linger                     follow the current project's live session
+    linger <file.jsonl>        replay a recording, played from the start
+    linger <id>                replay a session by id, or a unique prefix of one
+    linger <dir>               follow another project's live session
+    linger <file> --follow     follow a file's live edge instead of replaying
+    linger <file> --speed N    playback speed (default 8.0)
+    linger --provider <name>   force the format (claude, codex) instead of detecting it
+    linger inspect <file|id>   headless: print the session tree + info
+    linger --version           print the version and exit
 
 Once open, scrub/follow/pause/go-live are available no matter how you launched.";
 
@@ -121,9 +121,9 @@ fn parse_cli(args: impl Iterator<Item = String>) -> Result<Cli> {
                 std::process::exit(0);
             }
             // Packaging depends on this: the Homebrew formula's `test do`
-            // block runs `zoe --version`, and it has to exit 0.
+            // block runs `linger --version`, and it has to exit 0.
             "-V" | "--version" => {
-                println!("zoe {}", env!("CARGO_PKG_VERSION"));
+                println!("linger {}", env!("CARGO_PKG_VERSION"));
                 std::process::exit(0);
             }
             "--follow" => follow = true,
@@ -285,7 +285,7 @@ async fn run_tui(cli: Cli) -> Result<()> {
 /// What a positional argument means: an existing file is a session's file, an
 /// existing directory is a project to follow, anything shaped like a path
 /// that does not exist is a typo, and the rest is a session id or a prefix
-/// of one. Shared by `zoe <target>` and `zoe inspect <target>`.
+/// of one. Shared by `linger <target>` and `linger inspect <target>`.
 fn resolve_target(arg: String) -> Result<Target> {
     let path = PathBuf::from(&arg);
     if path.is_file() {

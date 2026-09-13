@@ -228,6 +228,13 @@ pub fn facts(source: &Source, entry: &Entry) -> Vec<Fact> {
                                 name: name.clone(),
                                 summary,
                             }));
+                            out.push(about(FactKind::ToolEvidence {
+                                call: call.clone(),
+                                output: false,
+                                text: serde_json::to_string_pretty(&tu.input)
+                                    .unwrap_or_default()
+                                    .into(),
+                            }));
                             if is_spawn_tool(&name) {
                                 out.push(about(FactKind::Spawn { call: call.clone() }));
                             }
@@ -290,6 +297,23 @@ pub fn facts(source: &Source, entry: &Entry) -> Vec<Fact> {
                         } else {
                             Outcome::Ok
                         };
+                        if let Some(content) = &r.content {
+                            let text = match content {
+                                wire::ToolResultContent::Text(s) => s.clone(),
+                                wire::ToolResultContent::Blocks(v) => {
+                                    serde_json::to_string_pretty(v).unwrap_or_default()
+                                }
+                            };
+                            out.push(Fact {
+                                agent: Some(owner.clone()),
+                                ts,
+                                kind: FactKind::ToolEvidence {
+                                    call: call.clone(),
+                                    output: true,
+                                    text: text.into(),
+                                },
+                            });
+                        }
                         out.push(Fact {
                             agent: Some(owner.clone()),
                             ts,

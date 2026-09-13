@@ -12,3 +12,8 @@ tmp-*.gif
 
 # Working notes, not part of what ships.
 /TODO.md
+
+# Linger local-only artifacts and credentials
+/outputs/
+.env
+.env.*

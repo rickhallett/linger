@@ -45,3 +45,7 @@ pub mod autopilot;
 pub mod handler;
 #[cfg(feature = "native")]
 pub mod tui;
+
+pub mod inspector;
+#[cfg(feature = "native")]
+pub mod interpretation;

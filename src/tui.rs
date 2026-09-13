@@ -54,6 +54,8 @@ pub async fn run(
         }
     });
 
+    let (interpret_tx, mut interpret_rx) = mpsc::unbounded_channel();
+    let mut interpret_busy = false;
     let mut tick = tokio::time::interval(TICK);
     let mut last_tick = Instant::now();
     let mut last_status_tick = Instant::now();
@@ -66,6 +68,21 @@ pub async fn run(
     let mut pilot: Option<crate::autopilot::Autopilot> = None;
 
     let result = loop {
+        if !interpret_busy && let Some(request) = app.pending_interpretations.pop_front() {
+            interpret_busy = true;
+            let tx = interpret_tx.clone();
+            tokio::spawn(async move {
+                let _ = tx.send(crate::interpretation::run(request).await);
+            });
+        }
+        while let Ok(result) = interpret_rx.try_recv() {
+            interpret_busy = false;
+            if app.interpretations.len() > 64 {
+                app.interpretations.clear();
+            }
+            app.interpretations.insert(result.key, result.text);
+            app.interpretation_revision = app.interpretation_revision.wrapping_add(1);
+        }
         // Advance animation/auto-pan EVERY iteration before drawing — otherwise
         // marching-ant edges freeze (the tick_auto_pan return is ignored).
         let now = Instant::now();

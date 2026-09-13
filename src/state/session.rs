@@ -13,6 +13,9 @@ use chrono::{DateTime, Utc};
 
 use crate::fact::{Fact, FactKind, Outcome};
 
+pub type EvidenceVersions = OrdMap<(Option<DateTime<Utc>>, std::sync::Arc<str>), ()>;
+pub type EvidenceStore = OrdMap<(String, String, bool), EvidenceVersions>;
+
 /// Stable node id of the main (root) agent.
 pub const MAIN_ID: &str = "main";
 
@@ -29,6 +32,10 @@ const INTERACTIVE_IDLE_SECS: i64 = 120;
 #[derive(Clone, PartialEq)]
 pub struct SessionModel {
     pub session_id: String,
+    /// Evidence keyed by agent, call, direction; timestamped versions are
+    /// set-like so duplicate/reordered imports converge. Arc payloads keep
+    /// snapshot clones cheap and replay never reads future output.
+    pub evidence: EvidenceStore,
     /// Agents keyed by stable node id (`"main"`, `agentId`, or `wf-id`).
     pub(crate) agents: OrdMap<String, AgentInfo>,
     /// Stable spawn order of node ids (insertion order). Drives layout/nav.
@@ -301,6 +308,7 @@ impl SessionModel {
         agents.insert(MAIN_ID.to_string(), main);
         SessionModel {
             session_id,
+            evidence: OrdMap::new(),
             agents,
             spawn_order: Vector::unit(MAIN_ID.to_string()),
             last_activity: None,
@@ -311,6 +319,14 @@ impl SessionModel {
             prompts: Vector::new(),
             last_reasoning: HashMap::new(),
         }
+    }
+
+    /// Recorded versions available at this playhead, in timestamp order.
+    pub fn tool_evidence(&self, agent: &str, call: &str, output: bool) -> Vec<&str> {
+        self.evidence
+            .get(&(agent.to_string(), call.to_string(), output))
+            .map(|versions| versions.keys().map(|(_, text)| text.as_ref()).collect())
+            .unwrap_or_default()
     }
 
     /// Ensure an agent of `kind` exists under `id`, returning whether it was
@@ -528,6 +544,12 @@ impl SessionModel {
             }
             FactKind::ToolEnd { call, outcome } => {
                 self.complete_tool(id, call, *outcome == Outcome::Err, fact.ts);
+            }
+            FactKind::ToolEvidence { call, output, text } => {
+                self.evidence
+                    .entry((id.to_string(), call.clone(), *output))
+                    .or_default()
+                    .insert((fact.ts, text.clone()), ());
             }
             FactKind::Ended(status) => {
                 self.ended.insert(id.to_string(), *status);

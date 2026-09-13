@@ -94,6 +94,12 @@ pub enum FactKind {
     /// A tool call ended with an observed outcome. Emitted only from a record
     /// that carries the outcome; never synthesised from silence.
     ToolEnd { call: CallId, outcome: Outcome },
+    /// Full recorded payload, separate from status. Shared by replay snapshots.
+    ToolEvidence {
+        call: CallId,
+        output: bool,
+        text: std::sync::Arc<str>,
+    },
     /// This tool call spawns an agent. Lets the core record provenance for the
     /// child (which prompt era, which reasoning) before the child appears.
     Spawn { call: CallId },
@@ -163,6 +169,7 @@ impl FactKind {
             FactKind::Reasoning(_) => "Reasoning",
             FactKind::ToolStart { .. } => "ToolStart",
             FactKind::ToolEnd { .. } => "ToolEnd",
+            FactKind::ToolEvidence { .. } => "ToolEvidence",
             FactKind::Spawn { .. } => "Spawn",
             FactKind::Ended(_) => "Ended",
             FactKind::Session { .. } => "Session",
