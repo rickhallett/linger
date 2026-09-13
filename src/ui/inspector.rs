@@ -277,13 +277,26 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
             if i.tab == Tab::Explain || (!query.is_empty() && line.to_lowercase().contains(&query))
             {
                 spans.push(Span::styled(line.clone(), style));
+            } else if let Some(Some(json)) = i.json_lines.get(n) {
+                spans.extend(json.iter().cloned());
             } else {
                 spans.extend(evidence_spans(line, i.tab, i.raw, fenced));
             }
             if fence {
                 fenced = !fenced;
             }
-            Line::from(spans)
+            if i.json_lines.get(n).is_some_and(Option::is_some) {
+                let used: usize = spans.iter().map(Span::width).sum();
+                spans.push(Span::styled(
+                    " ".repeat(usize::from(inner.width).saturating_sub(used)),
+                    bg.bg(super::theme::JSON_SURFACE),
+                ));
+            }
+            Line::from(spans).style(if i.json_lines.get(n).is_some_and(Option::is_some) {
+                bg.bg(super::theme::JSON_SURFACE)
+            } else {
+                bg
+            })
         })
         .collect();
     frame.render_widget(
@@ -393,23 +406,6 @@ fn evidence_spans(line: &str, tab: Tab, raw: bool, fenced: bool) -> Vec<Span<'st
         )
     {
         return vec![Span::styled(line.to_owned(), heading)];
-    }
-    // JSON object keys in raw/structured input remain literal, including quotes.
-    if (raw || tab == Tab::Input) && trimmed.starts_with('"') {
-        let mut escaped = false;
-        for (at, ch) in trimmed.char_indices().skip(1) {
-            if ch == '"' && !escaped {
-                if trimmed[at + 1..].trim_start().starts_with(':') {
-                    let end = line.len() - trimmed.len() + at + 1;
-                    return vec![
-                        Span::styled(line[..end].to_owned(), code),
-                        Span::styled(line[end..].to_owned(), body),
-                    ];
-                }
-                break;
-            }
-            escaped = ch == '\\' && !escaped;
-        }
     }
     vec![Span::styled(line.to_owned(), body)]
 }

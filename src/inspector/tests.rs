@@ -176,6 +176,28 @@ fn codex_keeps_structured_output_and_inline_program() {
     assert_eq!(model.tool_evidence("main", "c", false), vec![input]);
     assert!(model.tool_evidence("main", "c", true)[0].contains("fixture-only"));
 }
+
+#[test]
+fn structured_json_is_indented_without_flattening_arrays_or_losing_fields() {
+    use super::readable_output;
+    use serde_json::{Value, json};
+    for value in [
+        json!({"items": [{"name": "café 界", "ready": true, "count": 2}], "empty": null}),
+        json!([1, {"nested": [false, null]}]),
+    ] {
+        let display = readable_output(&value.to_string(), 0);
+        assert!(display.contains('\n'));
+        assert_eq!(serde_json::from_str::<Value>(&display).unwrap(), value);
+    }
+    let item = json!({"type":"resource", "text":"keep this too", "resource":{"uri":"fixture://example", "data":[1,2]}});
+    let response = json!([{"type":"text", "text":"{\"ready\":true}"}, item]);
+    let display = readable_output(&response.to_string(), 0);
+    assert!(display.starts_with("{\n  \"ready\": true\n}"));
+    let block = display.split("[Structured content]\n\n").nth(1).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(block).unwrap(), item);
+    let envelope = json!({"output":"done", "metadata":{"paths":["a","b"]}});
+    assert!(readable_output(&envelope.to_string(), 0).contains("metadata\n\n{\n  \"paths\": ["));
+}
 #[test]
 fn claude_keeps_result_content() {
     use crate::provider::claude::{Record, Source, wire::parse_line};

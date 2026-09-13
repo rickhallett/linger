@@ -13,6 +13,7 @@ pub(crate) mod chips;
 pub(crate) mod edges;
 mod guide;
 pub(crate) mod inspector;
+pub(crate) mod json;
 pub mod keys;
 pub(crate) mod library;
 pub(crate) mod nodes;

@@ -27,6 +27,7 @@ pub struct Inspector {
     pub query: String,
     pub searching: bool,
     pub lines: Vec<String>,
+    pub json_lines: Vec<Option<Vec<ratatui::text::Span<'static>>>>,
     pub view_stamp: Option<u64>,
     pub notice: Option<String>,
     pub command: Option<String>,
@@ -247,7 +248,8 @@ impl App {
                 )
             })
             .unwrap_or_default();
-        i.lines = safe_text(&content)
+        let display = safe_text(&content);
+        i.lines = display
             .split('\n')
             .flat_map(|line| {
                 if !i.nowrap && i.content_width > 0 && !line.is_empty() {
@@ -257,6 +259,11 @@ impl App {
                 }
             })
             .collect();
+        i.json_lines = if matches!(i.tab, Tab::Input | Tab::Output) {
+            crate::ui::json::highlight(&display, &i.lines)
+        } else {
+            Vec::new()
+        };
     }
 
     pub fn find_in_inspector(&mut self, next: bool) {
@@ -342,19 +349,49 @@ fn readable_output(text: &str, depth: usize) -> String {
     if let Some(s) = v.as_str() {
         return readable_output(s, depth + 1);
     }
-    if let Some(parts) = v.as_array() {
+    if let Some(parts) = v.as_array()
+        && parts.iter().any(|p| {
+            matches!(
+                p.get("type").and_then(|t| t.as_str()),
+                Some(
+                    "text"
+                        | "input_text"
+                        | "output_text"
+                        | "image"
+                        | "image_url"
+                        | "resource"
+                        | "resource_link"
+                        | "audio"
+                )
+            )
+        })
+    {
         return parts
             .iter()
             .map(|p| {
-                p.get("text")
-                    .and_then(|t| t.as_str())
-                    .map(str::to_string)
-                    .unwrap_or_else(|| format!("[Structured content]\n{}", p))
+                if matches!(
+                    p.get("type").and_then(|t| t.as_str()),
+                    Some("text" | "input_text" | "output_text")
+                ) && let Some(text) = p.get("text").and_then(|t| t.as_str())
+                {
+                    return readable_output(text, depth + 1);
+                }
+                format!(
+                    "[Structured content]\n\n{}",
+                    serde_json::to_string_pretty(p).unwrap_or_else(|_| p.to_string())
+                )
             })
             .collect::<Vec<_>>()
             .join("\n\n");
     }
-    if let Some(map) = v.as_object() {
+    if let Some(map) = v.as_object()
+        && map.keys().any(|key| {
+            matches!(
+                key.as_str(),
+                "output" | "stdout" | "stderr" | "aggregated_output"
+            )
+        })
+    {
         let mut sections = Vec::new();
         for (key, value) in map {
             if let Some(body) = value.as_str().filter(|_| {
@@ -364,6 +401,12 @@ fn readable_output(text: &str, depth: usize) -> String {
                 )
             }) {
                 sections.push(format!("{}\n\n{}", key, readable_output(body, depth + 1)));
+            } else if value.is_object() || value.is_array() {
+                sections.push(format!(
+                    "{}\n\n{}",
+                    key,
+                    serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
+                ));
             } else {
                 sections.push(format!("{}: {}", key, value));
             }

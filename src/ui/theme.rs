@@ -12,6 +12,12 @@ pub const BORDER: BorderType = BorderType::Plain;
 pub const SELECTION_RAIL: &str = "▌ ";
 pub const GRID: Color = Color::Rgb(35, 55, 43); // #23372B
 pub const SELECTION: Color = Color::Rgb(50, 71, 59); // #32473B
+// A restrained green syntax palette for verified JSON blocks.
+pub const JSON_KEY: Color = Color::Rgb(182, 227, 189);
+pub const JSON_STRING: Color = Color::Rgb(139, 200, 163);
+pub const JSON_LITERAL: Color = Color::Rgb(164, 215, 190);
+pub const JSON_PUNCTUATION: Color = Color::Rgb(104, 143, 122);
+pub const JSON_SURFACE: Color = Color::Rgb(20, 35, 27);
 pub const BRIGHT_TEXT: Color = Color::Rgb(247, 232, 178); // #F7E8B2
 
 pub fn theme() -> Theme {
