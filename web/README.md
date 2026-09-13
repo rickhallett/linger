@@ -10,7 +10,7 @@ The canonical design is **Osaka Jade**, based on the former Orange variant and r
 - `linger/public/favicon.svg`: site icon.
 - `astro.linger.config.mjs`: active Astro configuration.
 
-`pnpm dev` starts the local site; `pnpm build` generates `dist/`. Only `/` and `/guide/` are published by this build. Production is https://lingerer.xyz on Vercel project `linger-website`. See [the release process](../docs/RELEASING.md) for independent website tags and environments.
+`pnpm dev` starts the local site; `pnpm build` generates `dist/`. Only `/` and `/guide/` are published by this build. Production is https://lingerer.xyz on Vercel project `linger-website`. See [the release process](../docs/RELEASING.md) for PR previews and automatic production deployment from main.
 
 The inspector uses `../examples/repair.jsonl` as a fictional fixture at build time. Its reference notes are authored demonstration content. Website interactions do not run terminal commands or make model requests. Check product claims against the current repository documentation when changing copy.
 

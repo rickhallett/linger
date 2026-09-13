@@ -1,13 +1,13 @@
 # Releases and deployments
 
-Linger has one repository and two independently versioned release tracks. The runtime runs on the user's machine; Vercel hosts only the static website.
+Linger has one repository. The runtime has versioned releases; the website deploys continuously. The runtime runs on the user's machine; Vercel hosts only the static website.
 
 | Track | Version source | Preview | Production |
 | --- | --- | --- | --- |
 | Runtime | Cargo.toml | Checks on PR/main; prerelease `runtime-vX.Y.Z-rc.N` tags build macOS artifacts in `runtime-preview` | `runtime-vX.Y.Z` publishes crates.io and GitHub archives in `runtime-production` |
-| Website | web/package.json | Same-repository PRs and main deploy to `website-preview`; forks build without secrets | `website-vX.Y.Z` deploys to `website-production` and records a GitHub release |
+| Website | Commit SHA | Same-repository PRs deploy to `website-preview`; forks build without secrets | Changes on main deploy to `website-production`; no website tags or GitHub releases |
 
-Tags must match their manifest exactly. Production website tags must be stable versions. Runtime and website tags may reference different commits. Do not reuse or move a published tag. Repository rules prevent release-tag updates/deletion and main force pushes/deletion. Release only reviewed, committed source; do not capture an active working tree with `--allow-dirty`.
+Runtime tags must match Cargo.toml exactly. Do not reuse or move a published tag. Repository rules prevent release-tag updates/deletion and main force pushes/deletion. Release only reviewed, committed source; do not capture an active working tree with `--allow-dirty`.
 
 ## Runtime
 
@@ -27,8 +27,8 @@ Mac binaries are not Apple Developer ID signed or notarized. Linux is checked in
 
 1. Change only the canonical site in `web/linger/`. Historical design experiments belong in ignored local `outputs/archive/`, never in deployment inputs.
 2. Build with Node 24 and `pnpm@10.34.5`: `pnpm --dir web install --frozen-lockfile` then `pnpm --dir web run build`.
-3. Push/PR for a preview. Review `/`, `/guide/`, mobile layout and demo controls.
-4. Bump `web/package.json` independently, commit, then tag `website-vX.Y.Z` and push the tag. The workflow validates the tag and deploys production.
+3. Open a PR for a preview. Review `/`, `/guide/`, mobile layout and demo controls.
+4. Merge or push website changes to main. The workflow builds and deploys production automatically. No version bump, tag or GitHub release is needed.
 5. Verify https://lingerer.xyz and the www redirect. A successful build alone does not prove domain routing.
 
 Vercel project: `linger-website`, team `rick-halletts-projects`. The repository root supplies the active site's fictional example. `vercel.json` sets the build/output paths; `.vercelignore` excludes runtime, inherited browser app, private outputs and archives. Git auto-deploy is disabled to avoid duplicate deploys; GitHub Actions owns deployment.
@@ -41,4 +41,4 @@ For rollback, promote a previously verified Vercel production deployment using t
 
 ## Initial registry handoff
 
-The macOS release can be downloaded before crates.io onboarding finishes. Until then, install from the exact `runtime-v0.1.0` Git tag. After account verification and a valid Cargo token are available, publish from that tag in a clean worktree, configure Trusted Publishing, update the existing GitHub release notes, and switch website install copy back to crates.io in a new website release. Do not move `runtime-v0.1.0` or include newer development source.
+The macOS release can be downloaded before crates.io onboarding finishes. Until then, install from the exact `runtime-v0.1.0` Git tag. After account verification and a valid Cargo token are available, publish from that tag in a clean worktree, configure Trusted Publishing, update the existing GitHub release notes, and switch website install copy back to crates.io on main. Do not move `runtime-v0.1.0` or include newer development source.
