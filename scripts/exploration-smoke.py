@@ -12,7 +12,7 @@ with tempfile.TemporaryDirectory(prefix='linger-explorer-pty-') as data_dir:
         terminal.key(b'l'); terminal.expect('Part 2/3'); terminal.expect('short-format')
         terminal.capture('command-git')
         terminal.key(b'\x1b'); terminal.key(b'k3'); terminal.expect('Part 1/5')
-        terminal.key(b'll'); terminal.expect('here-document'); terminal.expect('Quoting the'); terminal.expect('delimiter prevents')
+        terminal.key(b'll'); terminal.expect('here-document'); terminal.expect('Quoting the'); terminal.expect('prevents shell parameter')
         terminal.capture('command-heredoc')
         terminal.key(b'l'); terminal.expect('Python body'); terminal.expect('unknown')
         terminal.key(b'\x1b'); terminal.key(b'kk3'); terminal.expect('Part 1/4')
@@ -69,3 +69,32 @@ with tempfile.TemporaryDirectory(prefix='linger-no-pack-') as data_dir:
         if previous is None: os.environ.pop('LINGER_EXPLAINSHELL_DIR', None)
         else: os.environ['LINGER_EXPLAINSHELL_DIR'] = previous
 print(json.dumps({'missing_backend':'setup instruction and recorded output remain usable'}))
+# Regression for the command-pane failures: a real native lookup of composed
+# shell input recovered from JavaScript containing an unrelated regex literal.
+with tempfile.TemporaryDirectory(prefix='linger-parser-pty-') as data_dir:
+    command = "pwd\npython3 - <<'PY'\nprint(1)\nPY\ngit status --short\nprintf '%s' \"$((1+2))\""
+    source = 'const unrelated = /a[b]/; await tools.exec_command({cmd:' + json.dumps(command) + '});'
+    rows = [json.loads(Path('examples/nested.jsonl').read_text().splitlines()[0]),
+            {'timestamp':'2026-09-13T13:00:01Z','type':'response_item',
+             'payload':{'type':'custom_tool_call','name':'exec','call_id':'parser-fictional', 'input':source}}]
+    fixture = Path(data_dir)/'parser.jsonl'
+    fixture.write_text(''.join(json.dumps(row)+'\n' for row in rows))
+    with Session(str(fixture), data_dir) as terminal:
+        terminal.key(b'\r3'); terminal.expect('literal from JavaScript')
+        terminal.expect('Coverage:'); terminal.expect('unsupported_expansion:')
+        terminal.expect('Part 1/')
+        seen = set()
+        # Inspect actual selectable parts, not command text repeated in the header.
+        for _ in range(24):
+            content = terminal.text()
+            for kind in ['Python body · unknown', 'opaque expansion · unknown', 'delimiter · matched']:
+                if kind in content:
+                    seen.add(kind)
+            if 'short-format' in content:
+                seen.add('following git option')
+            terminal.key(b'l')
+        assert seen == {'Python body · unknown','opaque expansion · unknown','delimiter · matched','following git option'}, seen
+        terminal.capture('command-partial-coverage')
+        terminal.key(b'1'); terminal.expect('const unrelated')
+        terminal.key(b'3'); terminal.expect('unsupported_expansion:')
+print(json.dumps({'checks':['regex-adjacent literal opens in native command pane','coverage and partial diagnostic visible','composed heredoc parts selectable','following command documented','unsupported expansion selectable','original JavaScript retained'], 'provider_requests':0}))

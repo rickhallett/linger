@@ -97,6 +97,12 @@ dotenvy = { version = "0.15", optional = true }
 shell-words = "1.1"
 rusqlite = { version = "0.40", features = ["bundled"], optional = true }
 sha2 = "0.10"
+# Static JavaScript AST extraction; pure Rust, MSRV 1.85, shared with the portable core.
+oxc_allocator = "=0.75.0"
+oxc_ast = "=0.75.0"
+oxc_ast_visit = "=0.75.0"
+oxc_parser = "=0.75.0"
+oxc_span = "=0.75.0"
 
 # The library's own wasm requirement, independent of any frontend: chrono needs
 # its wasm time binding for `Utc::now()` to work in-browser. A browser backend

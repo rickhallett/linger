@@ -22,6 +22,18 @@ pub struct Explanation {
     pub spans: Vec<Part>,
     #[serde(default)]
     pub error: Option<String>,
+    #[serde(default)]
+    pub error_code: Option<String>,
+    #[serde(default)]
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Diagnostic {
+    pub code: String,
+    pub message: String,
+    pub start: usize,
+    pub end: usize,
 }
 
 #[derive(Default)]
@@ -74,7 +86,7 @@ impl Explanation {
     /// Reject malformed ranges, preserve overlaps for nested shell constructs,
     /// and expose uncovered non-whitespace as explicitly unknown.
     pub fn validate(mut self, command: &str) -> Self {
-        if self.error.is_some() {
+        if self.error.is_some() && self.spans.is_empty() {
             return self;
         }
         let offsets: Vec<_> = command
@@ -87,9 +99,24 @@ impl Explanation {
             .iter()
             .any(|p| p.start >= p.end || p.end >= offsets.len())
         {
-            return Self::message(
+            return Self::failure(
+                "invalid_adapter_span",
                 "The matcher returned invalid spans. Inspect the original Input instead.",
             );
+        }
+        if self
+            .diagnostics
+            .iter()
+            .any(|d| d.start > d.end || d.end >= offsets.len())
+        {
+            return Self::failure(
+                "invalid_adapter_span",
+                "The matcher returned invalid diagnostic positions. Inspect the original Input instead.",
+            );
+        }
+        for d in &mut self.diagnostics {
+            d.start = offsets[d.start];
+            d.end = offsets[d.end];
         }
         let mut covered = vec![false; offsets.len() - 1];
         for p in &mut self.spans {
@@ -115,28 +142,60 @@ impl Explanation {
     }
 
     pub fn notes(&self, command: &str, index: usize) -> String {
-        if let Some(error) = &self.error {
-            return error.clone();
+        if let Some(error) = &self.error
+            && self.spans.is_empty()
+        {
+            return match &self.error_code {
+                Some(code) => format!("{error}\n\nCategory: {code}"),
+                None => error.clone(),
+            };
         }
         let Some(p) = self.spans.get(index) else {
-            return "No command parts to explore.".into();
+            return "No executable command parts in this input.".into();
         };
         let extraction = if p.extractor.is_empty() {
             String::new()
         } else {
             format!(" · extraction: {}", p.extractor)
         };
+        let documented = self.spans.iter().filter(|p| p.known).count();
+        let bodies = self
+            .spans
+            .iter()
+            .filter(|p| p.kind.ends_with(" body"))
+            .count();
+        let mut coverage = format!(
+            "Coverage: {documented} reference parts · {bodies} embedded bodies · {} undocumented parts.",
+            self.spans
+                .iter()
+                .filter(|p| !p.known && !p.kind.ends_with(" body"))
+                .count()
+        );
+        for d in &self.diagnostics {
+            coverage.push_str(&format!("\n{}: {}", d.code, d.message));
+        }
+        if let Some(error) = &self.error {
+            coverage.push_str(&format!("\n{error}"));
+        }
         format!(
-            "Part {}/{} · {} · {}\n\n{}\n\nSource: {}{}\n\n{}\n\nLocal matching; no command executed. The manual platform is a reference, not a detected execution host.\nUse 1 for original input; i for Mercury on the whole call.",
+            "Part {}/{} · {} · {}\n{}\n\n{}\n\nSource: {}{}\n\n{}\n\nLocal matching; no command executed. The manual platform is a reference, not a detected execution host.\nUse 1 for original input; i for Mercury on the whole call.",
             index + 1,
             self.spans.len(),
             p.kind,
             if p.known { "matched" } else { "unknown" },
+            coverage,
             &command[p.start..p.end],
             p.source,
             extraction,
             p.text
         )
+    }
+
+    pub fn failure(code: &str, text: impl Into<String>) -> Self {
+        Self {
+            error_code: Some(code.into()),
+            ..Self::message(text)
+        }
     }
 }
 
@@ -223,12 +282,12 @@ impl App {
 
 #[cfg(feature = "native")]
 pub async fn run(command: String) -> (String, Explanation) {
-    let result = lookup(&command).await.unwrap_or_else(Explanation::message);
+    let result = lookup(&command).await.unwrap_or_else(|error| error);
     (command, result)
 }
 
 #[cfg(feature = "native")]
-async fn lookup(command: &str) -> Result<Explanation, String> {
+async fn lookup(command: &str) -> Result<Explanation, Explanation> {
     use std::{path::PathBuf, process::Stdio};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let root = std::env::var_os("LINGER_EXPLAINSHELL_DIR")
@@ -242,7 +301,10 @@ async fn lookup(command: &str) -> Result<Explanation, String> {
                 .join("linger/explainshell")
         });
     if !root.join(".venv/bin/python").is_file() || !root.join("manpages.db").is_file() {
-        return Err("Command exploration needs the optional local explainshell pack.\n\nFrom the Linger checkout run:\nuv run scripts/setup-explainshell.py\n\nThen restart Linger. Setup downloads documentation; lookups stay local. Existing reference notes follow below.".into());
+        return Err(Explanation::failure(
+            "backend_unavailable",
+            "Command exploration needs the optional local explainshell pack.\n\nFrom the Linger checkout run:\nuv run scripts/setup-explainshell.py\n\nThen restart Linger. Setup downloads documentation; lookups stay local. Existing reference notes follow below.",
+        ));
     }
     let work = async {
         let mut child = tokio::process::Command::new(root.join(".venv/bin/python"))
@@ -254,13 +316,17 @@ async fn lookup(command: &str) -> Result<Explanation, String> {
             .stderr(Stdio::null())
             .kill_on_drop(true)
             .spawn()
-            .map_err(|_| "Could not start the local command matcher.".to_string())?;
+            .map_err(|_| {
+                Explanation::failure(
+                    "backend_unavailable",
+                    "Could not start the local command matcher.",
+                )
+            })?;
         let bytes = serde_json::to_vec(&serde_json::json!({"command": command})).unwrap();
         let mut stdin = child.stdin.take().unwrap();
-        stdin
-            .write_all(&bytes)
-            .await
-            .map_err(|_| "Could not send input to the local matcher.")?;
+        stdin.write_all(&bytes).await.map_err(|_| {
+            Explanation::failure("backend_io", "Could not send input to the local matcher.")
+        })?;
         drop(stdin);
         let mut output = Vec::new();
         child
@@ -270,25 +336,40 @@ async fn lookup(command: &str) -> Result<Explanation, String> {
             .take(2 * 1024 * 1024 + 1)
             .read_to_end(&mut output)
             .await
-            .map_err(|_| "Could not read local documentation.")?;
+            .map_err(|_| {
+                Explanation::failure("backend_io", "Could not read local documentation.")
+            })?;
         if output.len() > 2 * 1024 * 1024 {
-            return Err("Local documentation exceeded the response limit.".into());
+            return Err(Explanation::failure(
+                "response_limit",
+                "Local documentation exceeded the response limit.",
+            ));
         }
         let status = child
             .wait()
             .await
-            .map_err(|_| "Local matcher did not complete.")?;
+            .map_err(|_| Explanation::failure("backend_io", "Local matcher did not complete."))?;
         if !status.success() {
-            return Err("Local matcher failed; original input remains available.".into());
+            return Err(Explanation::failure(
+                "backend_failure",
+                "Local matcher failed; original input remains available.",
+            ));
         }
-        let response: Explanation = serde_json::from_slice(&output)
-            .map_err(|_| "Local matcher returned an unreadable response.")?;
+        let response: Explanation = serde_json::from_slice(&output).map_err(|_| {
+            Explanation::failure(
+                "invalid_response",
+                "Local matcher returned an unreadable response.",
+            )
+        })?;
         Ok(response.validate(command))
     };
     tokio::time::timeout(std::time::Duration::from_secs(5), work)
         .await
         .map_err(|_| {
-            "Local documentation lookup timed out; original input remains available.".to_string()
+            Explanation::failure(
+                "timeout",
+                "Local documentation lookup timed out; original input remains available.",
+            )
         })?
 }
 
@@ -308,7 +389,7 @@ mod tests {
                 kind: "operand".into(),
                 known: true,
             }],
-            error: None,
+            ..Explanation::default()
         }
         .validate(cmd);
         assert_eq!(
@@ -331,6 +412,27 @@ mod tests {
                 .error
                 .is_some()
         );
+    }
+    #[test]
+    fn partial_results_keep_parts_and_map_diagnostics_to_unicode_bytes() {
+        let cmd = "é bad";
+        let raw = r#"{"spans":[{"start":0,"end":1,"text":"reference","source":"fixture","extractor":"","kind":"command","known":true}],"diagnostics":[{"code":"unsupported_syntax","message":"Unparsed region remains available.","start":2,"end":5}]}"#;
+        let e = serde_json::from_str::<Explanation>(raw)
+            .unwrap()
+            .validate(cmd);
+        assert!(e.error.is_none());
+        assert_eq!(&cmd[e.diagnostics[0].start..e.diagnostics[0].end], "bad");
+        assert_eq!(e.spans.len(), 2);
+        assert!(!e.spans[1].known);
+        let notes = e.notes(cmd, 0);
+        assert!(notes.find("Coverage:").unwrap() < notes.find("Source:").unwrap());
+        assert!(notes.contains("unsupported_syntax: Unparsed region remains available."));
+        assert!(notes.contains("1 undocumented parts"));
+        let invalid = raw.replace("\"end\":5", "\"end\":6");
+        let e = serde_json::from_str::<Explanation>(&invalid)
+            .unwrap()
+            .validate(cmd);
+        assert_eq!(e.error_code.as_deref(), Some("invalid_adapter_span"));
     }
     #[test]
     fn only_recognized_shell_argv_exposes_its_inner_string() {

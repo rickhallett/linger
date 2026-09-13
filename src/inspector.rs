@@ -403,13 +403,21 @@ pub fn safe_text(text: &str) -> String {
 /// claim to have parsed or explained every token, expansion or embedded script.
 pub fn reference_notes(tool: &str, input: &str) -> String {
     if crate::command_literals::is_orchestration(tool) {
-        let commands = crate::command_literals::commands(tool, input);
+        let extraction = crate::command_literals::extract(tool, input);
+        let commands = extraction.literals;
         if !commands.is_empty() {
             return format!(
                 "{} literal shell argument(s) found in JavaScript.\n\nEnter inspects this call; 3 opens command documentation. {{ / }} switches between extracted commands. Input preserves the original code.",
                 commands.len()
             );
         }
+        return if extraction.syntax_error {
+            "JavaScript extraction unavailable: this input exceeds the extraction limit or contains unsupported or malformed JavaScript. Original code remains in Input; no code was evaluated.".into()
+        } else if extraction.calls > 0 {
+            "Shell call found, but its command value cannot be extracted safely as a literal. Dynamic values and properties that can override the command remain in Input. No code was evaluated.".into()
+        } else {
+            "No shell command call found in this JavaScript input. Input preserves the original code; no code was evaluated.".into()
+        };
     }
     let value = serde_json::from_str::<serde_json::Value>(input).ok();
     let shell_tool = matches!(
@@ -422,7 +430,7 @@ pub fn reference_notes(tool: &str, input: &str) -> String {
             | "functions.shell_command"
     );
     if !shell_tool {
-        return "No deterministic guide for this tool yet.\n\nThe Input tab preserves its code or structured arguments. Use i for contextual interpretation. Embedded Python or JavaScript is not shell syntax.".into();
+        return "This tool is not a supported shell-command tool.\n\nThe Input tab preserves its code or structured arguments. Use i for contextual interpretation. Embedded Python or JavaScript is not shell syntax.".into();
     }
     let command = value
         .as_ref()

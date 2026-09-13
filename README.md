@@ -70,7 +70,7 @@ Install the optional local documentation pack once, then restart Linger:
 uv run scripts/setup-explainshell.py
 ```
 
-Open a call, press **3**, and use **h/l** to select command parts. The exact span stays highlighted while you read its documentation. Pipelines, flags and operands are matched locally using explainshell; unknown parts remain explicit. Simple quoted Python heredocs expose their shell wrapper while keeping the Python body opaque. Recognized shell argument arrays expose the inner command string; tab **1** always retains the original input.
+Open a call, press **3**, and use **h/l** to select command parts. The exact span stays highlighted while you read its documentation. Pipelines, flags and operands are matched locally using explainshell; unknown parts remain explicit. Multiline scripts, comments and quoted or unquoted heredocs expose their shell structure while embedded Python, JavaScript and input bodies remain opaque. Partial results retain useful parts and identify unsupported regions. Bounded `uv run` and `pnpm run` references cover common wrappers. Recognized shell argument arrays expose the inner command string; tab **1** always retains the original input.
 
 The pack uses Ubuntu 26.04 manuals, which may differ from the execution host. The source path and extraction method are shown: local matching is deterministic over an LLM-built index. All indexed manpages in this pack were preprocessed by an LLM; option descriptions are sourced from the selected manual lines. Setup downloads about 220 MiB compressed; lookups are asynchronous and require no API key. See [setup, coverage and attribution](docs/COMMAND-EXPLORER.md).
 

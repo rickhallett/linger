@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='linger-nested-pty-') as data:
         t.key(b'1');t.expect('const label');t.expect('tools.exec_command')
         t.key(b'\x1b');t.expect('Preview')
         t.key(b'g');t.key(b'j');t.expect("const command")
-        t.key(b'3');t.expect('No deterministic guide')
+        t.key(b'3');t.expect('Shell call found')
         assert 'literal from JavaScript' not in t.text()
         t.key(b'b');t.key(b'/git diff\r');t.expect('git diff')
         t.key(b'\r3');t.expect('shell 2/2');t.expect('git diff --stat')

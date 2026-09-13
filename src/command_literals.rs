@@ -1,15 +1,17 @@
-//! Bounded static extraction of literal shell arguments from orchestration code.
-//! This is lexical inspection, not JavaScript evaluation or shell detection.
+//! Static extraction from JavaScript call expressions; never evaluates source.
+use oxc_allocator::Allocator;
+use oxc_ast::ast::{
+    Argument, CallExpression, Expression, ObjectPropertyKind, PropertyKey, PropertyKind,
+};
+use oxc_ast_visit::{Visit, walk};
+use oxc_parser::Parser;
+use oxc_span::{GetSpan, SourceType};
 #[derive(Clone, Debug)]
 pub struct Literal {
     pub text: String,
     /// Decoded UTF-8 bytes mapped to the original JavaScript source.
     pub origin: Vec<(usize, usize)>,
-}
-#[derive(Debug)]
-struct Token {
-    text: String,
-    literal: Option<Literal>,
+    source_start: usize,
 }
 
 pub fn is_orchestration(tool: &str) -> bool {
@@ -22,6 +24,7 @@ fn string(source: &str, start: usize) -> Option<(Literal, usize, bool)> {
     let mut out = Literal {
         text: String::new(),
         origin: Vec::new(),
+        source_start: start,
     };
     let mut constant = true;
     while at < source.len() {
@@ -30,7 +33,7 @@ fn string(source: &str, start: usize) -> Option<(Literal, usize, bool)> {
             return Some((out, at + 1, constant));
         }
         if quote == '`' && source[at..].starts_with("${") {
-            // Nested template expressions need a real JS parser. Fail closed.
+            // Only constant templates have a single decodable source map.
             return None;
         }
         let begin = at;
@@ -54,11 +57,29 @@ fn string(source: &str, start: usize) -> Option<(Literal, usize, bool)> {
                 }
                 '\\' | '\'' | '"' | '`' | '$' => escape.to_string(),
                 'x' | 'u' => {
-                    let digits = if escape == 'x' { 2 } else { 4 };
-                    let hex = source.get(at..at + digits)?;
-                    let value = u32::from_str_radix(hex, 16).ok()?;
-                    at += digits;
-                    char::from_u32(value)?.to_string()
+                    if escape == 'u' && source.as_bytes().get(at) == Some(&b'{') {
+                        let end = at + source[at..].find('}')?;
+                        let value = u32::from_str_radix(source.get(at + 1..end)?, 16).ok()?;
+                        at = end + 1;
+                        char::from_u32(value)?.to_string()
+                    } else {
+                        let digits = if escape == 'x' { 2 } else { 4 };
+                        let hex = source.get(at..at + digits)?;
+                        let mut value = u32::from_str_radix(hex, 16).ok()?;
+                        at += digits;
+                        if escape == 'u' && (0xD800..=0xDBFF).contains(&value) {
+                            if source.get(at..at + 2)? != "\\u" {
+                                return None;
+                            }
+                            let low = u32::from_str_radix(source.get(at + 2..at + 6)?, 16).ok()?;
+                            if !(0xDC00..=0xDFFF).contains(&low) {
+                                return None;
+                            }
+                            at += 6;
+                            value = 0x10000 + ((value - 0xD800) << 10) + low - 0xDC00;
+                        }
+                        char::from_u32(value)?.to_string()
+                    }
                 }
                 _ => {
                     constant = false;
@@ -77,152 +98,170 @@ fn string(source: &str, start: usize) -> Option<(Literal, usize, bool)> {
     }
     None
 }
-fn tokens(source: &str) -> Option<Vec<Token>> {
-    if source.len() > 128 * 1024 {
-        return None;
-    }
-    let mut out = Vec::new();
-    let mut at = 0;
-    while at < source.len() {
-        let c = source[at..].chars().next()?;
-        if c.is_whitespace() {
-            at += c.len_utf8();
-            continue;
-        }
-        if source[at..].starts_with("//") {
-            at += source[at..].find('\n').unwrap_or(source.len() - at);
-            continue;
-        }
-        if source[at..].starts_with("/*") {
-            at += 2 + source[at + 2..].find("*/")? + 2;
-            continue;
-        }
-        if matches!(c, '\'' | '"' | '`') {
-            let (literal, end, constant) = string(source, at)?;
-            out.push(Token {
-                text: literal.text.clone(),
-                literal: constant.then_some(literal),
-            });
-            at = end;
-            continue;
-        }
-        // A slash could introduce a regexp with fake call text. Do not guess.
-        if c == '/' {
-            return None;
-        }
-        let start = at;
-        at += c.len_utf8();
-        if c.is_alphanumeric() || c == '_' || c == '$' {
-            while let Some(next) = source[at..].chars().next() {
-                if !next.is_alphanumeric() && !matches!(next, '_' | '$') {
-                    break;
-                }
-                at += next.len_utf8();
-            }
-        }
-        out.push(Token {
-            text: source[start..at].into(),
-            literal: None,
-        });
-    }
-    Some(out)
+/// Result distinguishes absent shell calls from commands whose values need evaluation.
+#[derive(Default)]
+pub struct Extraction {
+    pub literals: Vec<Literal>,
+    pub calls: usize,
+    pub syntax_error: bool,
 }
-fn punct(t: &Token, text: &str) -> bool {
-    t.literal.is_none() && t.text == text
+
+pub fn extract(tool: &str, source: &str) -> Extraction {
+    let mut result = Extraction::default();
+    if !is_orchestration(tool) {
+        return result;
+    }
+    if source.len() > 128 * 1024 {
+        result.syntax_error = true;
+        return result;
+    }
+    let allocator = Allocator::default();
+    let parsed = Parser::new(&allocator, source, SourceType::mjs()).parse();
+    // Syntax recovery can synthesize nodes. Do not present those as recorded calls.
+    if parsed.panicked || !parsed.errors.is_empty() {
+        result.syntax_error = true;
+        return result;
+    }
+    struct Collector<'s> {
+        source: &'s str,
+        result: Extraction,
+    }
+    impl Collector<'_> {
+        fn literal(&self, call: &CallExpression<'_>) -> Option<Literal> {
+            let [Argument::ObjectExpression(object)] = call.arguments.as_slice() else {
+                return None;
+            };
+            let mut value = None;
+            for property in &object.properties {
+                let ObjectPropertyKind::ObjectProperty(property) = property else {
+                    return None;
+                };
+                if property.computed {
+                    return None;
+                }
+                let key = match &property.key {
+                    PropertyKey::StaticIdentifier(key) => key.name.as_str(),
+                    PropertyKey::StringLiteral(key) => key.value.as_str(),
+                    _ => return None,
+                };
+                if !matches!(key, "cmd" | "command") {
+                    continue;
+                }
+                if value.is_some()
+                    || property.method
+                    || property.shorthand
+                    || property.kind != PropertyKind::Init
+                {
+                    return None;
+                }
+                let span = property.value.span();
+                let cooked = match &property.value {
+                    Expression::StringLiteral(s) => s.value.as_str(),
+                    Expression::TemplateLiteral(t)
+                        if t.expressions.is_empty() && t.quasis.len() == 1 =>
+                    {
+                        t.quasis[0].value.cooked.as_ref()?.as_str()
+                    }
+                    _ => return None,
+                };
+                // Retain the exact character-to-source map and cross-check its decoding
+                // against the AST. Unsupported escapes stay unextracted, never guessed.
+                let (literal, end, constant) = string(self.source, span.start as usize)?;
+                if !constant || end != span.end as usize || literal.text != cooked {
+                    return None;
+                }
+                value = Some(literal);
+            }
+            value
+        }
+    }
+    impl<'a> Visit<'a> for Collector<'_> {
+        fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
+            if let Expression::StaticMemberExpression(member) = &call.callee
+                && !member.optional
+                && !call.optional
+                && let Expression::Identifier(object) = &member.object
+                && object.name == "tools"
+                && matches!(
+                    member.property.name.as_str(),
+                    "exec_command" | "shell_command"
+                )
+            {
+                self.result.calls += 1;
+                if let Some(literal) = self.literal(call) {
+                    self.result.literals.push(literal);
+                }
+            }
+            walk::walk_call_expression(self, call);
+        }
+    }
+    let mut collector = Collector { source, result };
+    collector.visit_program(&parsed.program);
+    collector.result.literals.sort_by_key(|l| l.source_start);
+    collector.result
 }
 
 pub fn commands(tool: &str, source: &str) -> Vec<Literal> {
-    if !is_orchestration(tool) {
-        return Vec::new();
-    }
-    let Some(tokens) = tokens(source) else {
-        return Vec::new();
-    };
-    let mut out = Vec::new();
-    for n in 0..tokens.len().saturating_sub(5) {
-        let prefix = &tokens[n..n + 6];
-        if !punct(&prefix[0], "tools")
-            || !punct(&prefix[1], ".")
-            || !["exec_command", "shell_command"]
-                .iter()
-                .any(|s| punct(&prefix[2], s))
-            || !punct(&prefix[3], "(")
-            || !punct(&prefix[4], "{")
-            || n > 0 && (punct(&tokens[n - 1], ".") || punct(&tokens[n - 1], "new"))
-        {
-            continue;
-        }
-        let mut i = n + 5;
-        let mut command = None;
-        let mut valid = true;
-        let mut closed = false;
-        // Only ordinary named object properties. Spreads/computed keys could
-        // replace cmd at runtime, so reject the entire argument in that case.
-        while i < tokens.len() {
-            if punct(&tokens[i], "}") {
-                closed = true;
-                break;
-            }
-            let key = &tokens[i];
-            if tokens.get(i + 1).is_none_or(|t| !punct(t, ":")) {
-                valid = false;
-                break;
-            }
-            let start = i + 2;
-            i = start;
-            let mut stack: Vec<&str> = Vec::new();
-            while i < tokens.len() {
-                let t = &tokens[i];
-                if t.literal.is_none() {
-                    let s = t.text.as_str();
-                    if stack.is_empty() && matches!(s, "," | "}") {
-                        break;
-                    }
-                    match s {
-                        "(" => stack.push(")"),
-                        "[" => stack.push("]"),
-                        "{" => stack.push("}"),
-                        ")" | "]" | "}" if stack.pop() != Some(s) => {
-                            valid = false;
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                i += 1;
-            }
-            if !valid {
-                break;
-            }
-            if matches!(key.text.as_str(), "cmd" | "command") {
-                if command.is_some() || i != start + 1 {
-                    valid = false;
-                    break;
-                }
-                command = tokens[start].literal.clone();
-                if command.is_none() {
-                    valid = false;
-                    break;
-                }
-            }
-            if tokens.get(i).is_some_and(|t| punct(t, ",")) {
-                i += 1;
-            }
-        }
-        if valid
-            && closed
-            && tokens.get(i + 1).is_some_and(|t| punct(t, ")"))
-            && let Some(command) = command
-        {
-            out.push(command);
-        }
-    }
-    out
+    extract(tool, source).literals
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn regex_division_and_dynamic_templates_do_not_erase_other_literal_calls() {
+        let source = r#"const pattern = /tools.exec_command\(\{cmd:'fake'\}\)/;
+const ratio = 20 / 4;
+const dynamic = `value ${ratio / 2}`;
+tools.exec_command({cmd: 'pwd', other: /x/});
+tools.exec_command({cmd: dynamic});
+tools.shell_command({command: `git status --short`});
+const later = /after/;"#;
+        let result = extract("exec", source);
+        assert!(!result.syntax_error);
+        assert_eq!(result.calls, 3);
+        assert_eq!(
+            result
+                .literals
+                .iter()
+                .map(|l| l.text.as_str())
+                .collect::<Vec<_>>(),
+            ["pwd", "git status --short"]
+        );
+    }
+    #[test]
+    fn ast_literals_preserve_unicode_escape_maps_and_empty_source_order() {
+        let source = r#"tools.exec_command({cmd:'echo \uD83D\uDE42'});tools.exec_command({cmd:''});tools.exec_command({cmd:`echo \u{1F642}`});"#;
+        let c = commands("exec", source);
+        assert_eq!(
+            c.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(),
+            ["echo 🙂", "", "echo 🙂"]
+        );
+        assert_eq!(
+            &source[c[0].origin[5].0..c[0].origin[8].1],
+            "\\uD83D\\uDE42"
+        );
+    }
+    #[test]
+    fn extraction_reports_absence_dynamic_values_and_invalid_source_separately() {
+        let absent = extract("exec", "const s = /tools.exec_command/;");
+        assert_eq!(absent.calls, 0);
+        assert!(!absent.syntax_error);
+        let dynamic = extract("exec", "tools.exec_command({cmd: value});");
+        assert_eq!(dynamic.calls, 1);
+        assert!(dynamic.literals.is_empty());
+        assert!(extract("exec", "tools.exec_command({cmd:").syntax_error);
+        for source in [
+            "tools.exec_command({cmd:'pwd',command:'ls'})",
+            "tools.exec_command({...x, cmd:'pwd'})",
+            "tools.exec_command({cmd:'pwd', get command(){return 'ls'}})",
+            "tools.exec_command({cmd:'pwd', [key]:42})",
+            "new tools.exec_command({cmd:'pwd'})",
+            "tools?.exec_command({cmd:'pwd'})",
+        ] {
+            assert!(commands("exec", source).is_empty(), "{source}");
+        }
+    }
     #[test]
     fn literal_calls_preserve_escapes_offsets_and_source_order() {
         let source = r#"text(await tools.exec_command({cmd: 'rg -n "café" src', workdir: dir})); await tools.exec_command({"cmd": `git status --short\nrg -l x .`})"#;
