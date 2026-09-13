@@ -18,7 +18,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let [heading, body, footer] = Layout::vertical([
         Constraint::Length(3),
         Constraint::Fill(1),
-        Constraint::Length(2),
+        Constraint::Length(3),
     ])
     .areas(area);
     let guide = &app.guide;
@@ -71,7 +71,8 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     };
     frame.render_widget(
         Paragraph::new(vec![
-            Line::styled(help, accent),
+            Line::raw(""),
+            super::keys::line(&help, dim, &app.key_feedback),
             Line::styled(
                 format!(
                     " {}",

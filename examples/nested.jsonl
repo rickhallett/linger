@@ -1,0 +1,5 @@
+{"type": "session_meta", "payload": {"id": "linger-nested-demo", "session_id": "linger-nested-demo", "source": "cli", "thread_source": "user", "cwd": "/fictional/nested-demo"}}
+{"timestamp": "2026-09-13T12:00:00Z", "type": "response_item", "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "nested-0", "input": "const label = 'rg -n is a label';\ntext(await tools.exec_command({\n  cmd: 'rg -n TODO src',\n  workdir: '/fictional/project'\n}));\ntext(await tools.exec_command({cmd: `git diff --stat && rg -n empty tests`}));"}}
+{"timestamp": "2026-09-13T12:00:03Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "nested-0", "output": "Fictional nested output 0"}}
+{"timestamp": "2026-09-13T12:00:06Z", "type": "response_item", "payload": {"type": "custom_tool_call", "name": "exec", "call_id": "nested-1", "input": "const command = ['rg', '-l', target].join(' ');\ntext(await tools.exec_command({cmd: command}));"}}
+{"timestamp": "2026-09-13T12:00:09Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "nested-1", "output": "Fictional nested output 1"}}

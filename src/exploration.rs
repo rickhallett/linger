@@ -32,6 +32,12 @@ pub struct Explorer {
 }
 
 pub fn command(tool: &str, input: &str) -> Option<String> {
+    if crate::command_literals::is_orchestration(tool) {
+        return crate::command_literals::commands(tool, input)
+            .into_iter()
+            .next()
+            .map(|c| c.text);
+    }
     if !matches!(
         tool,
         "Bash"
@@ -144,6 +150,7 @@ impl App {
             return;
         }
         let mut from_argv = false;
+        let mut shell_count = 0;
         let cmd = self.inspected_call().and_then(|call| {
             let i = self.inspector.as_ref()?;
             let evidence = self.session.tool_evidence(&i.agent, &call.id, false);
@@ -156,10 +163,20 @@ impl App {
                         .map(|c| c.is_array())
                 })
                 .unwrap_or(false);
-            command(&call.name, input)
+            if crate::command_literals::is_orchestration(&call.name) {
+                let literals = crate::command_literals::commands(&call.name, input);
+                shell_count = literals.len();
+                literals
+                    .get(i.shell_index.min(shell_count.saturating_sub(1)))
+                    .map(|c| c.text.clone())
+            } else {
+                command(&call.name, input)
+            }
         });
         let i = self.inspector.as_mut().unwrap();
         i.command_from_argv = from_argv;
+        i.shell_count = shell_count;
+        i.shell_index = i.shell_index.min(shell_count.saturating_sub(1));
         if i.command != cmd {
             i.command = cmd.clone();
             i.part = 0;

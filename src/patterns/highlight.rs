@@ -291,7 +291,18 @@ pub fn ranges(pattern: &Pattern, selected: &str) -> Ranges {
         return vec![(0, pattern.command.len())];
     }
     let mut out = BTreeMap::new();
-    if let Some(words) = argv(&pattern.command) {
+    if crate::command_literals::is_orchestration(&pattern.tool) {
+        for literal in crate::command_literals::commands(&pattern.tool, &pattern.command) {
+            walk(
+                &Mapped {
+                    text: literal.text,
+                    origin: literal.origin,
+                },
+                &mut out,
+                1,
+            );
+        }
+    } else if let Some(words) = argv(&pattern.command) {
         walk_words(&words, &mut out, 0);
     } else {
         walk(&Mapped::raw(&pattern.command), &mut out, 0);
@@ -313,6 +324,32 @@ mod tests {
             .unwrap()
             .key;
         (p, key)
+    }
+    #[test]
+    fn nested_calls_count_once_and_highlight_only_argument_source() {
+        let source = r#"const label = 'rg -n'; text(await tools.exec_command({cmd:'rg -n café src'})); text(await tools.exec_command({cmd:'rg -n other tests && git diff --stat'}))"#;
+        let p = super::super::pattern("functions.exec", source).unwrap();
+        let rows = super::super::projections(&p);
+        assert_eq!(
+            rows.iter()
+                .filter(|r| r.level == Level::Parts && r.label == "rg -n")
+                .count(),
+            1
+        );
+        assert!(
+            rows.iter()
+                .any(|r| r.level == Level::Parts && r.label == "git diff")
+        );
+        let row = rows
+            .iter()
+            .find(|r| r.level == Level::Parts && r.label == "rg -n")
+            .unwrap();
+        let hits = ranges(&p, &row.key);
+        assert_eq!(
+            hits.iter().map(|&(s, e)| &source[s..e]).collect::<Vec<_>>(),
+            ["rg", "-n", "rg", "-n"]
+        );
+        assert!(hits.iter().all(|&(s, _)| s > source.find("text(").unwrap()));
     }
     #[test]
     fn wrapper_and_inner_program_map_to_original_json_not_other_fields() {

@@ -209,12 +209,12 @@ fn laptop_render_exposes_evidence_and_navigation() {
     assert!(text.contains("i Mercury"));
 }
 #[test]
-fn reference_does_not_treat_javascript_as_shell() {
+fn reference_distinguishes_literal_shell_arguments_from_javascript() {
     let text = crate::inspector::reference_notes(
         "exec",
         r#"await tools.exec_command({cmd:'rg -n TODO src'})"#,
     );
-    assert!(text.contains("No deterministic guide"));
+    assert!(text.contains("1 literal shell argument(s) found in JavaScript"));
     assert!(!text.contains("var1 is the pattern"));
 }
 

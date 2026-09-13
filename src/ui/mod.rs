@@ -13,6 +13,7 @@ pub(crate) mod chips;
 pub(crate) mod edges;
 mod guide;
 pub(crate) mod inspector;
+pub mod keys;
 pub(crate) mod library;
 pub(crate) mod nodes;
 pub(crate) mod panel;
@@ -506,7 +507,11 @@ fn render_timeline_panel(frame: &mut Frame, area: Rect, app: &mut App, show_log:
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(theme::BORDER)
-        .title(" Time · ,/. event · [/] prompt · g latest ")
+        .title(keys::line(
+            " Time · ,/. event · [/] prompt · g latest ",
+            border,
+            &app.key_feedback,
+        ))
         .border_style(border)
         .style(bg);
     let inner = block.inner(area);
@@ -870,7 +875,7 @@ fn render_status_bar(frame: &mut Frame, area: Rect, app: &App) {
 
     frame.render_widget(Paragraph::new(Line::from(left)).style(bg), left_area);
     frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(hints, bg.fg(palette.muted))))
+        Paragraph::new(keys::line(&hints, bg.fg(palette.muted), &app.key_feedback))
             .style(bg)
             .alignment(Alignment::Right),
         right_area,

@@ -31,6 +31,8 @@ pub struct Inspector {
     pub notice: Option<String>,
     pub command: Option<String>,
     pub command_from_argv: bool,
+    pub shell_index: usize,
+    pub shell_count: usize,
     pub part: usize,
     pub command_lines: Vec<ratatui::text::Line<'static>>,
     pub command_row: usize,
@@ -97,6 +99,8 @@ impl App {
         i.horizontal = 0;
         i.notice = None;
         i.command = None;
+        i.shell_index = 0;
+        i.shell_count = 0;
         i.part = 0;
     }
 
@@ -194,6 +198,7 @@ impl App {
         self.inspected_call()
             .map(|c| c.state as u8)
             .hash(&mut signature);
+        i.shell_index.hash(&mut signature);
         let stamp = signature.finish();
         if i.view_stamp == Some(stamp) {
             return;
@@ -397,6 +402,15 @@ pub fn safe_text(text: &str) -> String {
 /// Deliberately bounded reference coverage. This is a command guide, not a
 /// claim to have parsed or explained every token, expansion or embedded script.
 pub fn reference_notes(tool: &str, input: &str) -> String {
+    if crate::command_literals::is_orchestration(tool) {
+        let commands = crate::command_literals::commands(tool, input);
+        if !commands.is_empty() {
+            return format!(
+                "{} literal shell argument(s) found in JavaScript.\n\nEnter inspects this call; 3 opens command documentation. {{ / }} switches between extracted commands. Input preserves the original code.",
+                commands.len()
+            );
+        }
+    }
     let value = serde_json::from_str::<serde_json::Value>(input).ok();
     let shell_tool = matches!(
         tool,

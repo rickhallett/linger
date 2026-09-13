@@ -24,9 +24,9 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let muted = bg.fg(palette.subtle);
     let border = bg.fg(palette.muted);
     let [heading, body, footer] = Layout::vertical([
-        Constraint::Length(2),
+        Constraint::Length(4),
         Constraint::Fill(1),
-        Constraint::Length(2),
+        Constraint::Length(3),
     ])
     .areas(area);
     let count = app
@@ -42,8 +42,16 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                 Span::styled(format!("    {} events ahead", buffered), muted),
             ]),
             Line::styled(
-                " Enter drill in · Esc back · G guide · b patterns · p Practising",
-                muted,
+                format!(" {} · {}", if i.detail { "Reading" } else { "Preview" },
+                    app.session.agent(&i.agent).and_then(|a| a.tool_calls().enumerate().find(|(_, c)| Some(&c.id) == i.call.as_ref()))
+                        .map(|(n, c)| format!("call {}/{} · {} · {}", n+1, count, safe_text(&c.name), safe_text(c.summary.as_deref().unwrap_or(&c.id))))
+                        .unwrap_or_default()),
+                if i.detail { accent.add_modifier(Modifier::BOLD) } else { muted },
+            ),
+            super::keys::line(
+                if i.detail { " Enter reading · Esc calls · Tab focus · G guide · b patterns · p Practising" }
+                else { " Enter read selected call · j/k select · Tab focus · Esc back · G guide · b patterns" },
+                muted, &app.key_feedback,
             ),
         ])
         .style(bg),
@@ -59,7 +67,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let position = calls.iter().position(|c| Some(&c.id) == i.call.as_ref());
     let start = position
         .unwrap_or(0)
-        .saturating_sub(calls_area.height.saturating_sub(4) as usize / 2);
+        .saturating_sub(calls_area.height.saturating_sub(4) as usize / 4);
     let rows: Vec<_> = calls
         .iter()
         .skip(start)
@@ -120,15 +128,17 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         (Tab::Interpret, "4 Interpretation"),
     ]
     .into_iter()
-    .map(|(t, label)| {
-        Span::styled(
-            format!(" {} ", label),
+    .flat_map(|(t, label)| {
+        super::keys::line(
+            &format!(" {} ", label),
             if t == i.tab {
                 super::theme::selected()
             } else {
                 muted
             },
+            &app.key_feedback,
         )
+        .spans
     })
     .collect::<Vec<_>>();
     let block = Block::default()
@@ -168,19 +178,29 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
         );
         frame.render_widget(
             Paragraph::new(vec![
-                Line::from(format!(
-                    "h/l ←/→ parts · j/k scroll{}{}",
-                    if i.command_from_argv {
-                        " · shell string from argv"
-                    } else {
-                        ""
-                    },
-                    if i.command_lines.len() > height as usize {
-                        " · command excerpt"
-                    } else {
-                        ""
-                    }
-                )),
+                super::keys::line(
+                    &format!(
+                        "h/l parts · j/k scroll{}{}",
+                        if i.shell_count > 0 {
+                            format!(
+                                " · {{/}} shell {}/{} · literal from JavaScript",
+                                i.shell_index + 1,
+                                i.shell_count
+                            )
+                        } else if i.command_from_argv {
+                            " · shell string from argv".into()
+                        } else {
+                            String::new()
+                        },
+                        if i.command_lines.len() > height as usize {
+                            " · command excerpt"
+                        } else {
+                            ""
+                        }
+                    ),
+                    muted,
+                    &app.key_feedback,
+                ),
                 Line::from(
                     [
                         ("command", "command"),
@@ -240,10 +260,10 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let help = if i.searching {
         format!(" /{}▏  Enter find · Esc cancel", safe_text(&i.query))
     } else if i.tab == Tab::Explain {
-        " 1–4 tabs · h/l parts · j/k scroll · W wrap · i Mercury · / search · Esc calls".into()
+        " 1/2/3/4 tabs · h/l parts · j/k scroll · W wrap · i Mercury · / search · Esc calls".into()
     } else {
         format!(
-            " 1–4 tabs · v raw/readable · i Mercury · / search · n next · W {} · PgUp/PgDn   {}/{}",
+            " 1/2/3/4 tabs · v raw/readable · i Mercury · / search · n next · W {} · PgUp/PgDn   {}/{}",
             if i.nowrap { "wrap (h/l pan)" } else { "unwrap" },
             scroll + 1,
             i.lines.len()
@@ -272,8 +292,9 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     });
     frame.render_widget(
         Paragraph::new(vec![
-            Line::styled(help, accent),
-            Line::styled(status, muted),
+            Line::raw(""),
+            super::keys::line(&help, muted, &app.key_feedback),
+            super::keys::line(&status, muted, &app.key_feedback),
         ])
         .style(bg),
         footer,

@@ -12,6 +12,8 @@ Inline code, heredocs, expansions, redirection and unfamiliar command options re
 
 Keys are SHA-256 digests of versioned, explicitly serialized pattern descriptions. `usage-v1` and `exact-v1` distinguish the two modes. Changing normalization rules requires a new key version and an explicit state migration decision; do not silently transfer a Learned label to a different pattern.
 
+Literal shell arguments to `tools.exec_command`/`tools.shell_command` inside orchestration code now contribute their own parts, programs and combinations. The outer JavaScript remains an exact inline-code row, hidden by default. Repeated forms within one outer call count once. Highlight ranges map decoded command bytes back to their original quoted JavaScript characters; matching words elsewhere in code are not highlighted. These counts describe contained forms, not independently observed nested executions.
+
 ## Structural levels and inline scripts
 
 The library defaults to Parts. The Combinations view hides inline script bodies. `S` includes them; a nonempty search searches and displays matching scripts. This filters rows, never deletes observations. Common Python stdin/`-c`, Node/Ruby/Perl eval forms and code tools are recognized conservatively; this is not arbitrary language classification.

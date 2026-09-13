@@ -31,7 +31,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     let dim = bg.fg(palette.subtle);
     let accent = bg.fg(palette.accent);
     let [header, body, footer] = Layout::vertical([
-        Constraint::Length(2),
+        Constraint::Length(4),
         Constraint::Fill(1),
         Constraint::Length(3),
     ])
@@ -63,9 +63,10 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
                     dim,
                 ),
             ]),
-            Line::styled(
-                " G guide · Tab scope · f level · c parts · S scripts · j/k select · h/l occurrence · Enter inspect · ? help · b/Esc return",
-                dim,
+            Line::raw(""),
+            super::keys::line(
+                " G guide · Tab scope · f level · c parts · S scripts · j/k select · h/l example · Enter inspect · b/Esc back",
+                dim, &app.key_feedback,
             ),
         ])
         .style(bg),
@@ -171,7 +172,15 @@ pub fn render(frame: &mut Frame, area: Rect, app: &mut App) {
     } else {
         "Loading local library…"
     });
-    frame.render_widget(Paragraph::new(vec![Line::styled(help,accent),Line::styled(" Counts are calls containing each form; rows overlap. Whole opened recordings, independent of playhead.",dim),Line::styled(format!(" {status}"),dim)]).style(bg),footer);
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::raw(""),
+            super::keys::line(&help, dim, &app.key_feedback),
+            super::keys::line(&format!(" {status}"), dim, &app.key_feedback),
+        ])
+        .style(bg),
+        footer,
+    );
 }
 
 fn preview_lines(

@@ -149,6 +149,7 @@ struct Snapshot {
 /// [`tui`](crate::tui) loop and the browser crate. They are frontend plumbing
 /// rather than an interface to build on, and carry no stability promise.
 pub struct App {
+    pub key_feedback: crate::ui::keys::Feedback,
     pub library: crate::patterns::Library,
     pub guide: crate::guide::Guide,
     pub explorer: crate::exploration::Explorer,
@@ -243,6 +244,7 @@ impl App {
         App {
             library: Default::default(),
             guide: Default::default(),
+            key_feedback: Default::default(),
             explorer: Default::default(),
             inspector: None,
             interpretation_revision: 0,

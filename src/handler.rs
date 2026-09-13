@@ -19,7 +19,14 @@ use crate::state::{App, Camera};
 /// `app` only — every key path is in-process state (no channel).
 pub fn handle_event(event: &Event, app: &mut App) -> bool {
     match event {
-        Event::Key(key) => handle_key(key, app),
+        Event::Key(key) => {
+            let feedback = feedback_key(key, app);
+            let quit = handle_key(key, app);
+            if let Some(label) = feedback {
+                app.key_feedback.record(label);
+            }
+            quit
+        }
         Event::Paste(text) if app.guide.open && app.guide.editing.is_some() => {
             guide_insert(app, text);
             false
@@ -89,6 +96,63 @@ pub fn handle_event(event: &Event, app: &mut App) -> bool {
         }
         _ => false,
     }
+}
+
+// Capture the action before routing changes the active pane. Text-entry keys
+// are deliberately excluded: typing "f" is not the level shortcut.
+fn feedback_key(key: &KeyEvent, app: &App) -> Option<String> {
+    if key.kind == KeyEventKind::Release
+        || key
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+    {
+        return None;
+    }
+    let typing = if app.guide.open {
+        app.guide.editing.is_some() || app.guide.searching
+    } else if let Some(view) = &app.library.view {
+        view.searching
+    } else {
+        app.inspector.as_ref().is_some_and(|i| i.searching)
+    };
+    if typing && !matches!(key.code, KeyCode::Enter | KeyCode::Esc) {
+        return None;
+    }
+    let allowed = if app.guide.open {
+        "qG/njkh lwpLu"
+    } else if app.library.view.is_some() {
+        "?[],. gGbqcfSH/jkhlrwpLu"
+    } else if app.inspector.is_some() {
+        "GbpwLuWv1234eiR/njkhlqQ,.[]{}g "
+    } else {
+        "G b,.qQjkg[] sofri?+-=0"
+    };
+    Some(match key.code {
+        KeyCode::Char('e')
+            if app.inspector.is_some() && !app.guide.open && app.library.view.is_none() =>
+        {
+            "3".into()
+        }
+        KeyCode::Char(c) if allowed.contains(c) => {
+            if c == ' ' {
+                "Space".into()
+            } else {
+                c.to_string()
+            }
+        }
+        KeyCode::Enter => "Enter".into(),
+        KeyCode::Esc => "Esc".into(),
+        KeyCode::Tab | KeyCode::BackTab => "Tab".into(),
+        KeyCode::Down => "j".into(),
+        KeyCode::Up => "k".into(),
+        KeyCode::Left => "h".into(),
+        KeyCode::Right => "l".into(),
+        KeyCode::PageDown => "PgDn".into(),
+        KeyCode::PageUp => "PgUp".into(),
+        KeyCode::End => "g".into(),
+        KeyCode::Home => "Home".into(),
+        _ => return None,
+    })
 }
 
 /// Handle a single key event, returning `true` to quit.
@@ -351,6 +415,12 @@ fn inspector_key(key: &KeyEvent, app: &mut App) -> bool {
             }
         }
         KeyCode::Enter => i.detail = true,
+        KeyCode::Char('{') if i.tab == crate::inspector::Tab::Explain => {
+            i.shell_index = i.shell_index.saturating_sub(1);
+        }
+        KeyCode::Char('}') if i.tab == crate::inspector::Tab::Explain => {
+            i.shell_index = (i.shell_index + 1).min(i.shell_count.saturating_sub(1));
+        }
         KeyCode::Char('G') => app.open_field_guide(),
         KeyCode::Char('b') => app.open_library(),
         KeyCode::Char('p') => app.mark_inspected(crate::patterns::Learning::Practising),
@@ -700,6 +770,25 @@ mod tests {
         });
         app.scrubber_area = Some(ratatui::layout::Rect::new(2, 5, 20, 3));
         app
+    }
+
+    #[test]
+    fn hotkeys_acknowledge_actions_but_not_search_text_or_releases() {
+        let mut app = App::new("s".into(), Mode::Replay);
+        app.open_library();
+        let key = KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE);
+        handle_event(&Event::Key(key), &mut app);
+        assert!(app.key_feedback.active("f"));
+        app.key_feedback = Default::default();
+        app.library.view.as_mut().unwrap().searching = true;
+        handle_event(&Event::Key(key), &mut app);
+        assert!(!app.key_feedback.active("f"));
+        assert_eq!(app.library.view.as_ref().unwrap().query, "f");
+        app.library.view.as_mut().unwrap().searching = false;
+        let mut release = key;
+        release.kind = KeyEventKind::Release;
+        handle_event(&Event::Key(release), &mut app);
+        assert!(!app.key_feedback.active("f"));
     }
 
     fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event {

@@ -46,6 +46,7 @@ pub mod handler;
 #[cfg(feature = "native")]
 pub mod tui;
 
+pub mod command_literals;
 pub mod exploration;
 pub mod inspector;
 #[cfg(feature = "native")]

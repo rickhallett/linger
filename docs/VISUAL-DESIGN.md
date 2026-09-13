@@ -33,3 +33,5 @@ The graph and replay layout derive from Zoetrope with attribution. Linger's insp
 ## Current limits
 
 The direction targets dark terminals with true-colour support and respects NO_COLOR. It is not yet a light theme or a theme editor. Inspect at laptop dimensions with the fictional fixture; actual font rendering is controlled by the terminal.
+
+Shortcut legends use brighter key glyphs with a 650 ms amber acknowledgement after activation, preserving layout width. Header/footer whitespace separates controls from evidence. Text entry does not trigger shortcut feedback. The inspector names the selected call alongside Preview/Reading focus, and keeps a selected call near the middle of longer call lists.

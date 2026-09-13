@@ -103,7 +103,14 @@ pub fn projections(pattern: &Pattern) -> Vec<Projection> {
         inline: matches!(pattern.tool.as_str(), "functions.exec" | "exec" | "python"),
     }];
     if out[0].inline {
-        return out;
+        for literal in crate::command_literals::commands(&pattern.tool, &pattern.command) {
+            analyze_command(&literal.text, &mut out, 1);
+        }
+        let mut unique = BTreeMap::new();
+        for p in out {
+            unique.entry(p.key.clone()).or_insert(p);
+        }
+        return unique.into_values().collect();
     }
     // Structured argv is retained as JSON by the original exact-input index.
     let value = serde_json::from_str::<serde_json::Value>(&pattern.command).ok();

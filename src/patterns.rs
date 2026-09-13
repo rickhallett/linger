@@ -467,7 +467,20 @@ impl App {
             self.library.notice=Some("This example is cached from another session. Open that recording to inspect its output.".into());
             return;
         };
+        let shell_index = crate::command_literals::commands(&o.pattern.tool, &o.pattern.command)
+            .iter()
+            .position(|literal| {
+                pattern(
+                    "Bash",
+                    &serde_json::json!({"cmd": literal.text}).to_string(),
+                )
+                .is_some_and(|p| projections(&p).iter().any(|p| p.key == row.key))
+            })
+            .unwrap_or(0);
         self.open_occurrence(o);
+        if let Some(i) = &mut self.inspector {
+            i.shell_index = shell_index;
+        }
     }
     pub(crate) fn open_occurrence(&mut self, o: Occurrence) {
         // Jump deliberately to the last recorded event for this occurrence.
