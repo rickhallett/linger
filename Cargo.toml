@@ -99,7 +99,7 @@ imbl = "7.0.1"
 dotenvy = { version = "0.15", optional = true }
 shell-words = "1.1"
 rusqlite = { version = "0.40", features = ["bundled"], optional = true }
-sha2 = "0.10"
+sha2 = "0.11"
 
 # The library's own wasm requirement, independent of any frontend: chrono needs
 # its wasm time binding for `Utc::now()` to work in-browser. A browser backend
